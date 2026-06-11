@@ -1,6 +1,216 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -891,7 +1101,7 @@ function hashStr(s){
 // INIT & STORAGE
 // ══════════════════════════════════════════════════════════════
 function loadData(){
-  // Les completions sont rechargées après login dans onLoginSuccess()
+  // Chargement initial depuis cache local - sera écrasé par Supabase dans initSupabase()
   try{completions=JSON.parse(localStorage.getItem("hm_comp")||"{}");}catch(e){}
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
@@ -916,19 +1126,27 @@ function loadData(){
     }
   }
 }
-function saveData(){
+async function saveData(){
   const uid=currentUser?currentUser.id:'guest';
-  localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-  localStorage.setItem("hm_comp",JSON.stringify(completions));
-  localStorage.setItem("hm_cust",JSON.stringify(customTasks));
-  localStorage.setItem("hm_log",JSON.stringify(completionLog));
-  localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
-  // ── Sync Supabase ──
+  // ── 1. Supabase en priorité (source de vérité) ──
   if(_sbClient && _fbConnected){
-    _sb.set('hm_completions', uid, completions);
-    _sb.set('hm_app_data','hm_custom_tasks', customTasks);
-    _sb.set('hm_app_data','hm_task_overrides', taskOverrides);
+    try{
+      await Promise.all([
+        _sb.set('hm_completions', uid, completions),
+        _sb.set('hm_app_data','hm_custom_tasks', customTasks),
+        _sb.set('hm_app_data','hm_task_overrides', taskOverrides),
+        _sb.set('hm_app_data','hm_log', completionLog)
+      ]);
+    }catch(e){ console.warn('Supabase save error',e); }
   }
+  // ── 2. Cache local uniquement (fallback offline) ──
+  try{
+    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+    localStorage.setItem("hm_comp",JSON.stringify(completions));
+    localStorage.setItem("hm_cust",JSON.stringify(customTasks));
+    localStorage.setItem("hm_log",JSON.stringify(completionLog));
+    localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
+  }catch(e){}
 }
 function saveCustomRoles(){
   localStorage.setItem("hm_custom_roles", JSON.stringify(customRoles));
@@ -2078,7 +2296,7 @@ function buildReportHTML(forPrint=false){
   const cd=companyData,gPct=totalTasks?Math.round(totalDone/totalTasks*100):0;
   const logoHtml=cd.logo?`<img src="${cd.logo}" style="height:50px;border-radius:6px;" alt="Logo">`:`<span style="font-size:28px;">🏬</span>`;
   const dirBlock=cd.directorName?`<div><span style="font-size:10px;opacity:.6;">Directeur</span><br><span style="font-size:13px;font-weight:700;">${cd.directorName}${cd.directorTitle?' — '+cd.directorTitle:''}</span></div>`:'';
-  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport — ${periodLabel}</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1f2e;padding:${forPrint?"0":"20px"};}@page{margin:15mm 12mm;size:A4;}@media print{body{padding:0;}}</style></head><body>
+  return `<!DOCTYPE html><html lang="fr"><head><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script><meta charset="UTF-8"><title>Rapport — ${periodLabel}</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1f2e;padding:${forPrint?"0":"20px"};}@page{margin:15mm 12mm;size:A4;}@media print{body{padding:0;}}</style></head><body>
   <div style="background:linear-gradient(135deg,#0a1628,#0d3060);color:#fff;padding:18px 22px;border-radius:${forPrint?"0":"8px 8px 0 0"};">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">${logoHtml}<div><div style="font-size:16px;font-weight:900;">${cd.nom||'RAPPORT DE SUIVI DES TÂCHES'}</div>${cd.address?`<div style="font-size:11px;opacity:.7;">${cd.address}</div>`:''}</div></div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">
