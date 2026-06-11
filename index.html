@@ -393,6 +393,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       </div>
     </div>
     <button class="login-btn" id="btn-login" type="button" onclick="doLogin()">🔐 Connexion</button>
+    <div id="sb-loading-hint" style="display:none;font-size:11px;color:#3ecf8e;text-align:center;margin-top:6px;font-weight:600;"></div>
     <div class="login-error" id="login-error"></div>
     <div class="login-hint" id="login-hint">Connexion initiale : admin / 1234</div>
     <div style="text-align:center;margin-top:12px;"><button type="button" id="btn-reset-pw" onclick="resetLoginData()" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;">🔄 Réinitialiser le mot de passe</button></div>
@@ -2368,6 +2369,8 @@ async function initSupabase(cfg){
       _sb.set('hm_app_data','hm_users',usersData);
       window._usersSyncPending=false;
     }
+    // ✅ Débloquer le bouton Connexion — users chargés depuis Supabase
+    _setLoginReady(true);
 
     // ── customRoles ──
     const cr = await _sb.get('hm_app_data','hm_custom_roles');
@@ -2455,18 +2458,41 @@ async function initSupabase(cfg){
     showFirebaseStatus('❌ Erreur Supabase : '+err.message,'#e74c3c');
     showToast('❌ Erreur Supabase : '+err.message,'#e74c3c');
     _fbConnected=false; _fbDb=null; _sbClient=null;
+    _setLoginReady(true); // débloquer quand même
+  }
+}
+
+function _setLoginReady(ready, msg){
+  const btn = document.getElementById('btn-login');
+  const hint = document.getElementById('sb-loading-hint');
+  if(!btn) return;
+  if(ready){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    btn.innerHTML = '🔐 Connexion';
+    if(hint) hint.style.display = 'none';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.style.cursor = 'not-allowed';
+    btn.innerHTML = '⏳ ' + (msg||'Chargement...');
+    if(hint){ hint.style.display = 'block'; hint.textContent = msg||'Synchronisation en cours...'; }
   }
 }
 
 function initFirebaseOnStartup(){
-  // Clés pré-configurées — Marjane Tanger Médina
   const defaultCfg={
     projectUrl:'https://kipfcdhraasuuksypfyu.supabase.co',
     anonKey:'sb_publishable__tvkohWyHFGl8Yv9t3G9Uw_2cn-FXH4'
   };
   const cfg = loadFirebaseConfig() || defaultCfg;
   if(!loadFirebaseConfig()) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
-  setTimeout(()=>initSupabase(cfg), 300);
+  // Bloquer le bouton immédiatement si login screen visible
+  setTimeout(()=>{ _setLoginReady(false,'Connexion Supabase...'); }, 50);
+  // Lancer Supabase — si échec après 8 sec, débloquer quand même
+  const fallback = setTimeout(()=>{ _setLoginReady(true); }, 8000);
+  initSupabase(cfg).then(()=>clearTimeout(fallback)).catch(()=>{ clearTimeout(fallback); _setLoginReady(true); });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2752,7 +2778,9 @@ window.addEventListener('beforeunload',()=>{saveData();saveCompanyData();});
 
 // ── Login event listeners : voir setupLoginListeners() après doLogin ──
 
-// ── doLogin reécrit robuste ──
+// ── doLogin ──
+// Le bouton est bloqué par initFirebaseOnStartup() jusqu'à ce que Supabase
+// ait chargé tous les users — donc usersData est toujours à jour ici.
 function doLogin(){
   var un=(document.getElementById('login-username').value||'').trim().toLowerCase();
   var pw=(document.getElementById('login-password').value||'').trim();
@@ -2761,62 +2789,46 @@ function doLogin(){
   if(!un||!pw){ errEl.textContent='Veuillez remplir tous les champs.'; errEl.style.display='block'; return; }
 
   var hash=hashStr(pw);
-
-  function tryLogin(list){
-    return (list||[]).find(function(u){ return u.username===un && u.passwordHash===hash && u.active; });
-  }
-  function loginSuccess(user){
+  var user=usersData.find(function(u){ return u.username===un && u.passwordHash===hash && u.active; });
+  if(user){
     errEl.style.display='none';
     currentUser=user;
     sessionStorage.setItem('hm_session',JSON.stringify({userId:user.id,loginAt:new Date().toISOString()}));
     onLoginSuccess();
-  }
-  function loginFail(){
-    errEl.style.color=''; errEl.textContent='Identifiant ou mot de passe incorrect.';
-    errEl.style.display='block';
-    document.getElementById('login-password').value='';
-  }
-
-  // Étape 1 : essai immédiat sur localStorage
-  var u1=tryLogin(usersData);
-  if(u1){ loginSuccess(u1); return; }
-
-  // Étape 2 : recharger depuis Supabase (toujours — l'admin a pu créer l'user sur un autre appareil)
-  if(_sbClient){
-    errEl.textContent='⏳ Vérification en cours...';
-    errEl.style.color='#3ecf8e'; errEl.style.display='block';
-    var done=false;
-    var timer=setTimeout(function(){ if(done)return; done=true; loginFail(); },7000);
-    _sb.get('hm_app_data','hm_users').then(function(sbUsers){
-      if(done)return; done=true; clearTimeout(timer);
-      if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
-        // Fusion : union local + Supabase, préserver hash locaux modifiés
-        var localPwMap={};
-        usersData.forEach(function(u){ if(u._pwChanged) localPwMap[u.id]=u.passwordHash; });
-        var remoteById={};
-        sbUsers.forEach(function(u){ remoteById[u.id]=u; });
-        var localById={};
-        usersData.forEach(function(u){ localById[u.id]=u; });
-        // union des deux
-        var allIds=new Set(Object.keys(localById).concat(Object.keys(remoteById)));
-        var merged=[];
-        allIds.forEach(function(id){
-          var loc=localById[id], rem=remoteById[id];
-          if(loc && rem){ var f=Object.assign({},rem); if(loc._pwChanged) f.passwordHash=loc.passwordHash,f._pwChanged=true; merged.push(f); }
-          else if(rem){ merged.push(rem); }
-          else if(loc){ merged.push(loc); }
-        });
-        usersData=merged;
-        localStorage.setItem('hm_users',JSON.stringify(usersData));
-        _fbUsersLoaded=true;
-      }
-      errEl.style.display='none';
-      var u2=tryLogin(usersData);
-      if(u2){ loginSuccess(u2); } else { loginFail(); }
-    }).catch(function(){ if(done)return; done=true; clearTimeout(timer); loginFail(); });
     return;
   }
-  loginFail();
+
+  // Si malgré tout l'user n'est pas trouvé (ex: créé très récemment),
+  // forcer un rechargement depuis Supabase une dernière fois
+  if(_sbClient){
+    errEl.textContent='⏳ Vérification finale...';
+    errEl.style.color='#3ecf8e'; errEl.style.display='block';
+    _sb.get('hm_app_data','hm_users').then(function(sbUsers){
+      if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
+        usersData=sbUsers; localStorage.setItem('hm_users',JSON.stringify(usersData));
+      }
+      errEl.style.display='none';
+      var u2=usersData.find(function(u){ return u.username===un && u.passwordHash===hash && u.active; });
+      if(u2){
+        currentUser=u2;
+        sessionStorage.setItem('hm_session',JSON.stringify({userId:u2.id,loginAt:new Date().toISOString()}));
+        onLoginSuccess();
+      } else {
+        errEl.style.color=''; errEl.textContent='Identifiant ou mot de passe incorrect.';
+        errEl.style.display='block';
+        document.getElementById('login-password').value='';
+      }
+    }).catch(function(){
+      errEl.style.color=''; errEl.textContent='Identifiant ou mot de passe incorrect.';
+      errEl.style.display='block';
+      document.getElementById('login-password').value='';
+    });
+    return;
+  }
+
+  errEl.style.color=''; errEl.textContent='Identifiant ou mot de passe incorrect.';
+  errEl.style.display='block';
+  document.getElementById('login-password').value='';
 }
 
 // ── resetLoginData global ──
