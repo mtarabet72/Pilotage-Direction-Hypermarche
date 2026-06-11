@@ -2320,6 +2320,9 @@ async function initSupabase(cfg){
     _fbDb=true; // flag compat : if(_fbDb) reste vrai
     showFirebaseStatus('✅ Supabase connecté — Suivi live actif','#3ecf8e');
     showToast('⚡ Supabase connecté !','#3ecf8e');
+    // Débloquer le bouton de connexion si l'écran de login est visible
+    const loginBtn=document.getElementById('btn-login');
+    if(loginBtn){ loginBtn.disabled=false; loginBtn.style.opacity='1'; loginBtn.textContent='🔐 Connexion'; }
 
     // ── Chargement users ──
     const usersRow = await _sb.get('hm_app_data','hm_users');
@@ -2429,6 +2432,14 @@ function initFirebaseOnStartup(){
   };
   const cfg = loadFirebaseConfig() || defaultCfg;
   if(!loadFirebaseConfig()) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
+  // Indiquer chargement sur le bouton login
+  setTimeout(function(){
+    const loginBtn=document.getElementById('btn-login');
+    if(loginBtn && document.getElementById('login-overlay') && !document.getElementById('login-overlay').classList.contains('hidden')){
+      loginBtn.textContent='⏳ Chargement...';
+      loginBtn.style.opacity='0.7';
+    }
+  },50);
   setTimeout(()=>initSupabase(cfg), 300);
 }
 
@@ -2720,49 +2731,71 @@ function doLogin(){
   var un = (document.getElementById('login-username').value || '').trim().toLowerCase();
   var pw = (document.getElementById('login-password').value || '').trim();
   var errEl = document.getElementById('login-error');
-  errEl.style.display = 'none';
-  errEl.textContent = '';
+  errEl.style.display = 'none'; errEl.textContent = '';
+
   if(!un || !pw){
     errEl.textContent = 'Veuillez remplir tous les champs.';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  // Si Firebase est configuré mais users pas encore chargés → attendre
-  if(_fbDb && usersData.length <= 1 && !_fbUsersLoaded){
-    errEl.textContent = '⏳ Chargement des utilisateurs en cours...';
-    errEl.style.display = 'block';
-    errEl.style.color = '#f39c12';
-    // Attendre max 4 secondes que Firebase charge
-    _sb.get('hm_app_data','hm_users').then(function(fbUsers){
-      if(fbUsers && Array.isArray(fbUsers) && fbUsers.length > 0){
-        usersData = fbUsers;
-        localStorage.setItem('hm_users', JSON.stringify(usersData));
-      }
-      _fbUsersLoaded = true;
-      errEl.style.display = 'none';
-      doLogin(); // relancer
-    }).catch(function(){
-      _fbUsersLoaded = true;
-      errEl.style.display = 'none';
-      doLogin();
-    });
-    return;
+    errEl.style.display = 'block'; return;
   }
 
   var hash = hashStr(pw);
-  var user = usersData.find(function(u){ return u.username === un && u.passwordHash === hash && u.active; });
-  if(!user){
+
+  function tryLogin(users){
+    return (users||[]).find(function(u){
+      return u.username === un && u.passwordHash === hash && u.active;
+    });
+  }
+  function loginSuccess(user){
+    errEl.style.display = 'none';
+    currentUser = user;
+    sessionStorage.setItem('hm_session', JSON.stringify({userId:user.id, loginAt:new Date().toISOString()}));
+    onLoginSuccess();
+  }
+  function loginFail(){
     errEl.style.color = '';
     errEl.textContent = 'Identifiant ou mot de passe incorrect.';
     errEl.style.display = 'block';
     document.getElementById('login-password').value = '';
+  }
+
+  // ── Tentative 1 : données locales (localStorage) ──
+  var user = tryLogin(usersData);
+  if(user){ loginSuccess(user); return; }
+
+  // ── Tentative 2 : charger depuis Supabase puis réessayer ──
+  if(_sbClient){
+    errEl.textContent = '⏳ Vérification en cours...';
+    errEl.style.color = '#f39c12';
+    errEl.style.display = 'block';
+
+    var done = false;
+    var timer = setTimeout(function(){
+      if(done) return; done = true; loginFail();
+    }, 6000);
+
+    _sb.get('hm_app_data','hm_users').then(function(fbUsers){
+      if(done) return; done = true; clearTimeout(timer);
+      if(fbUsers && Array.isArray(fbUsers) && fbUsers.length > 0){
+        // Préserver les hash locaux modifiés (_pwChanged)
+        var localPwMap = {};
+        usersData.forEach(function(u){ if(u._pwChanged && u.passwordHash) localPwMap[u.id]=u.passwordHash; });
+        usersData = fbUsers;
+        usersData.forEach(function(u){ if(localPwMap[u.id]){ u.passwordHash=localPwMap[u.id]; u._pwChanged=true; } });
+        localStorage.setItem('hm_users', JSON.stringify(usersData));
+        _fbUsersLoaded = true;
+      }
+      errEl.style.display = 'none';
+      var user2 = tryLogin(usersData);
+      if(user2){ loginSuccess(user2); } else { loginFail(); }
+    }).catch(function(){
+      if(done) return; done = true; clearTimeout(timer);
+      loginFail();
+    });
     return;
   }
-  errEl.style.display = 'none';
-  currentUser = user;
-  sessionStorage.setItem('hm_session', JSON.stringify({userId: user.id, loginAt: new Date().toISOString()}));
-  onLoginSuccess();
+
+  // ── Pas de Supabase ──
+  loginFail();
 }
 
 // ── resetLoginData global ──
