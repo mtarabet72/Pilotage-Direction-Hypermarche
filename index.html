@@ -1101,7 +1101,7 @@ function hashStr(s){
 // INIT & STORAGE
 // ══════════════════════════════════════════════════════════════
 function loadData(){
-  // Chargement initial depuis cache local - sera écrasé par Supabase dans initSupabase()
+  // Les completions sont rechargées après login dans onLoginSuccess()
   try{completions=JSON.parse(localStorage.getItem("hm_comp")||"{}");}catch(e){}
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
@@ -1126,27 +1126,21 @@ function loadData(){
     }
   }
 }
-async function saveData(){
+function saveData(){
   const uid=currentUser?currentUser.id:'guest';
-  // ── 1. Supabase en priorité (source de vérité) ──
+  // ── 1. Supabase en priorité
   if(_sbClient && _fbConnected){
-    try{
-      await Promise.all([
-        _sb.set('hm_completions', uid, completions),
-        _sb.set('hm_app_data','hm_custom_tasks', customTasks),
-        _sb.set('hm_app_data','hm_task_overrides', taskOverrides),
-        _sb.set('hm_app_data','hm_log', completionLog)
-      ]);
-    }catch(e){ console.warn('Supabase save error',e); }
+    _sb.set('hm_completions', uid, completions);
+    _sb.set('hm_app_data','hm_custom_tasks', customTasks);
+    _sb.set('hm_app_data','hm_task_overrides', taskOverrides);
+    _sb.set('hm_app_data','hm_log', completionLog);
   }
-  // ── 2. Cache local uniquement (fallback offline) ──
-  try{
-    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-    localStorage.setItem("hm_comp",JSON.stringify(completions));
-    localStorage.setItem("hm_cust",JSON.stringify(customTasks));
-    localStorage.setItem("hm_log",JSON.stringify(completionLog));
-    localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
-  }catch(e){}
+  // ── 2. Cache local
+  localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+  localStorage.setItem("hm_comp",JSON.stringify(completions));
+  localStorage.setItem("hm_cust",JSON.stringify(customTasks));
+  localStorage.setItem("hm_log",JSON.stringify(completionLog));
+  localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
 }
 function saveCustomRoles(){
   localStorage.setItem("hm_custom_roles", JSON.stringify(customRoles));
@@ -2829,29 +2823,27 @@ function openLivePanel(){
 
 function startLivePolling(){
   stopLivePolling();
-  // Supabase realtime géré dans initSupabase
-  startLocalPolling();
-}
-
-let _livePollInterval=null,_liveChannel=null,_liveLastTick='';
-function startLocalPolling(){
+  // Essayer d'abord le realtime Supabase
   try{
-    _liveChannel=new BroadcastChannel('hm_live');
-    _liveChannel.onmessage=e=>{
-      if(e.data?.events) renderLivePanelFromEvents(e.data.events);
-    };
+    if(_sbClient&&_fbConnected){
+      if(_liveChannel){ try{_liveChannel.unsubscribe();}catch(e){} }
+      _liveChannel=_sb.on('hm_events',()=>{ _sb.get('hm_app_data','hm_events').then(evts=>renderLivePanelFromEvents(evts||{})).catch(()=>{}); });
+      if(_liveChannel&&_liveChannel.subscribe) _liveChannel.subscribe();
+    }
   }catch(ex){_liveChannel=null;}
-  _livePollInterval=setInterval(()=>{
-    try{
-      const tick=localStorage.getItem('hm_events_tick')||'';
-      if(tick===_liveLastTick) return;
-      _liveLastTick=tick;
-      const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
-      renderLivePanelFromEvents(evts);
-    }catch(e){}
-  },2000);
+  // Polling local uniquement si Supabase déconnecté
+  if(!_sbClient || !_fbConnected){
+    _livePollInterval=setInterval(()=>{
+      try{
+        const tick=localStorage.getItem('hm_events_tick')||'';
+        if(tick===_liveLastTick) return;
+        _liveLastTick=tick;
+        const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
+        renderLivePanelFromEvents(evts);
+      }catch(e){}
+    },2000);
+  }
 }
-
 function stopLivePolling(){
   if(_livePollInterval){clearInterval(_livePollInterval);_livePollInterval=null;}
   if(_liveChannel){_liveChannel.close();_liveChannel=null;}
