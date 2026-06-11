@@ -9,7 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!-- PWA Manifest -->
 <link rel="manifest" href="./manifest.json">
-<!-- Supabase SDK -->\n<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --bg:#eef0f5;--white:#fff;--border:#e2e6ed;--text:#1a1f2e;--muted:#8892a4;
@@ -624,7 +625,6 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     </div>
     <div style="margin-top:10px;font-size:10px;color:#bbb;">⚠️ Ces informations sont stockées localement sur cet appareil. Chaque appareil doit être configuré.</div>
   </div>
-
   <!-- Identité Société -->
   <div class="settings-card">
     <h3>🏢 Identité de la Société</h3>
@@ -925,15 +925,13 @@ function saveData(){
   // ── Sync Supabase ──
   if(_sbClient && _fbConnected){
     _sb.set('hm_completions', uid, completions);
-    _sb.set('hm_app_data', 'hm_custom_tasks', customTasks);
-    _sb.set('hm_app_data', 'hm_task_overrides', taskOverrides);
+    _sb.set('hm_app_data','hm_custom_tasks', customTasks);
+    _sb.set('hm_app_data','hm_task_overrides', taskOverrides);
   }
 }
 function saveCustomRoles(){
   localStorage.setItem("hm_custom_roles", JSON.stringify(customRoles));
-  if(_sbClient && _fbConnected){
-    _sb.set('hm_app_data', 'hm_custom_roles', customRoles);
-  }
+  if(_sbClient && _fbConnected){ _sb.set('hm_app_data','hm_custom_roles', customRoles); }
 }
 // ══════════════════════════════════════════════════════════════
 // GESTION DES DÉPARTEMENTS PERSONNALISÉS
@@ -1094,9 +1092,7 @@ function renderCustomRolesList(){
 
 function saveUsers(){
   localStorage.setItem("hm_users", JSON.stringify(usersData));
-  if(_sbClient && _fbConnected){
-    _sb.set('hm_app_data', 'hm_users', usersData);
-  }
+  if(_sbClient && _fbConnected){ _sb.set('hm_app_data','hm_users', usersData); }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1125,25 +1121,24 @@ function showLoginScreen(){
 // doLogin() déplacé plus haut avec les listeners
 function onLoginSuccess(){
   const uid=currentUser?currentUser.id:'guest';
-  // Charger completions depuis localStorage en premier
   try{ const s=localStorage.getItem('hm_comp_'+uid); completions=s?JSON.parse(s):{}; }catch(e){completions={};}
 
-  // ── Supabase : charger completions + events si connecté ──
+  // Supabase : charger completions + events si connecté
   if(_sbClient && _fbConnected && isDirecteur()){
     Promise.all([
       _sb.getAll('hm_completions'),
       _sb.get('hm_app_data','hm_events')
     ]).then(([rows,evts])=>{
-      if(rows){let merged={};rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);});completions=merged;}
-      if(evts&&typeof evts==='object') _eventsCache=evts;
-      renderTasks();renderProgressBar();renderDashboard();
+      if(rows && rows.length>0){ let merged={}; rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);}); completions=merged; }
+      if(evts && typeof evts==='object') _eventsCache=evts;
+      renderTasks(); renderProgressBar(); renderDashboard();
     }).catch(()=>{});
   } else if(_sbClient && _fbConnected){
     _sb.get('hm_completions',uid).then(myComp=>{
-      if(myComp&&typeof myComp==='object'){
+      if(myComp && typeof myComp==='object'){
         completions=myComp;
         localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-        renderTasks();renderProgressBar();
+        renderTasks(); renderProgressBar();
       }
     }).catch(()=>{});
   }
@@ -2242,12 +2237,40 @@ function confirmReset(){
 // FIREBASE — INIT & CONFIG
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-// SUPABASE — COUCHE DE SYNCHRONISATION
+// SUPABASE — COUCHE DE SYNCHRONISATION (remplace Firebase)
 // ══════════════════════════════════════════════════════════════
-let _sbClient=null,_fbConnected=false,_fbUsersLoaded=false;
-// Aliases pour compatibilité avec le reste du code
-let _fbApp=null,_fbDb=null,_fbLiveRef=null,_fbUnsubscribe=null;
+let _sbClient=null, _fbConnected=false, _fbUsersLoaded=false;
+let _fbApp=null, _fbDb=null, _fbLiveRef=null, _fbUnsubscribe=null; // aliases compat
 
+// ── Helpers Supabase ──────────────────────────────────────────
+// Toutes les opérations retournent des Promises correctement
+const _sb = {
+  set(table, key, value){
+    if(!_sbClient) return Promise.resolve();
+    const col = table==='hm_events'?'id': table==='hm_completions'?'user_id':'key';
+    return _sbClient.from(table).upsert({[col]:key, data:value})
+      .then(({error})=>{ if(error) console.warn('sb.set error:',error.message); });
+  },
+  get(table, key){
+    if(!_sbClient) return Promise.resolve(null);
+    const col = table==='hm_events'?'id': table==='hm_completions'?'user_id':'key';
+    return _sbClient.from(table).select('data').eq(col,key).maybeSingle()
+      .then(({data,error})=>{ return (error||!data)?null:data.data; });
+  },
+  getAll(table){
+    if(!_sbClient) return Promise.resolve([]);
+    return _sbClient.from(table).select('*')
+      .then(({data,error})=>{ return (error||!data)?[]:data; });
+  },
+  on(table, cb){
+    if(!_sbClient) return null;
+    return _sbClient.channel('rt:'+table)
+      .on('postgres_changes',{event:'*',schema:'public',table}, cb)
+      .subscribe();
+  }
+};
+
+// ── Persistance config ────────────────────────────────────────
 function loadFirebaseConfig(){
   try{ return JSON.parse(localStorage.getItem('hm_sb_cfg')||'null'); }catch(e){ return null; }
 }
@@ -2261,154 +2284,152 @@ function saveFirebaseConfig(){
 }
 function clearFirebaseConfig(){
   localStorage.removeItem('hm_sb_cfg');
-  _sbClient=null;_fbConnected=false;_fbDb=null;
+  _sbClient=null; _fbConnected=false; _fbDb=null;
   showFirebaseStatus('Supabase déconnecté','#888');
   showToast('Supabase déconnecté','#888');
 }
 function showFirebaseStatus(msg,color){
   const el=document.getElementById('firebase-status-bar');
-  if(!el)return;
-  el.textContent=msg;el.style.background=color+'22';el.style.color=color;el.style.display='block';
+  if(!el) return;
+  el.textContent=msg; el.style.background=color+'22'; el.style.color=color; el.style.display='block';
 }
 function renderFirebaseConfigForm(){
   const cfg=loadFirebaseConfig();
-  if(!cfg)return;
+  if(!cfg) return;
   const u=document.getElementById('fb-projectUrl');
   const k=document.getElementById('fb-anonKey');
-  if(u)u.value=cfg.projectUrl||'';
-  if(k)k.value=cfg.anonKey||'';
+  if(u) u.value=cfg.projectUrl||'';
+  if(k) k.value=cfg.anonKey||'';
 }
 function testFirebaseConnection(){
-  if(!_sbClient){showToast('Configurez Supabase d\'abord','#e74c3c');return;}
-  _sbClient.from('hm_app_data').upsert({key:'hm_ping',value:{t:Date.now(),by:currentUser?.name||'?'}})
-    .then(({error})=>{
-      if(error)showToast('❌ Erreur : '+error.message,'#e74c3c');
-      else showToast('✅ Supabase OK — écriture réussie','#27ae60');
-    });
+  if(!_sbClient){showToast("Configurez Supabase d'abord",'#e74c3c');return;}
+  _sb.set('hm_app_data','hm_ping',{t:Date.now(),by:currentUser?.name||'?'})
+    .then(()=>showToast('✅ Supabase OK — écriture réussie','#3ecf8e'))
+    .catch(e=>showToast('❌ Erreur : '+e.message,'#e74c3c'));
 }
 
-// ── Helpers Supabase qui remplacent _fbDb.ref().set() ──
-const _sb={
-  async set(table,key,value){
-    if(!_sbClient)return;
-    const col = table==='hm_events'?'id':table==='hm_completions'?'user_id':'key';
-    await _sbClient.from(table).upsert({[col]:key,data:value}).catch(()=>{});
-  },
-  async get(table,key){
-    if(!_sbClient)return null;
-    const col = table==='hm_events'?'id':table==='hm_completions'?'user_id':'key';
-    const {data,error}=await _sbClient.from(table).select('data').eq(col,key).maybeSingle();
-    return error?null:data?.data??null;
-  },
-  async getAll(table){
-    if(!_sbClient)return null;
-    const {data,error}=await _sbClient.from(table).select('*');
-    return error?null:data;
-  },
-  on(table,cb){
-    if(!_sbClient)return null;
-    const ch=_sbClient.channel('realtime:'+table)
-      .on('postgres_changes',{event:'*',schema:'public',table},(payload)=>cb(payload))
-      .subscribe();
-    return ch;
-  }
-};
-
+// ── Initialisation Supabase ────────────────────────────────────
 async function initSupabase(cfg){
   try{
-    _sbClient=supabase.createClient(cfg.projectUrl, cfg.anonKey);
-    // Test connexion rapide
-    const {error}=await _sbClient.from('hm_app_data').select('key').limit(1);
-    if(error) throw error;
+    _sbClient = supabase.createClient(cfg.projectUrl, cfg.anonKey);
+    // Test connexion
+    const {error:testErr} = await _sbClient.from('hm_app_data').select('key').limit(1);
+    if(testErr) throw testErr;
+
     _fbConnected=true;
-    _fbDb=true; // flag compat pour les conditions if(_fbDb)
+    _fbDb=true; // flag compat : if(_fbDb) reste vrai
     showFirebaseStatus('✅ Supabase connecté — Suivi live actif','#3ecf8e');
     showToast('⚡ Supabase connecté !','#3ecf8e');
 
-    // ── Charger users ──
+    // ── Chargement users ──
     const usersRow = await _sb.get('hm_app_data','hm_users');
     if(usersRow && Array.isArray(usersRow) && usersRow.length>0){
       usersData=usersRow;
       localStorage.setItem('hm_users',JSON.stringify(usersData));
       renderUsersList();
     } else if(usersData.length>0){
-      await _sb.set('hm_app_data','hm_users',usersData);
+      _sb.set('hm_app_data','hm_users',usersData);
     }
     _fbUsersLoaded=true;
 
-    // ── Charger customRoles ──
-    const cr=await _sb.get('hm_app_data','hm_custom_roles');
+    // ── customRoles ──
+    const cr = await _sb.get('hm_app_data','hm_custom_roles');
     if(cr && Array.isArray(cr) && cr.length>0){
       customRoles=cr;
       localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
       renderCustomRolesList();
     }
 
-    // ── Charger customTasks ──
-    const ct=await _sb.get('hm_app_data','hm_custom_tasks');
+    // ── customTasks ──
+    const ct = await _sb.get('hm_app_data','hm_custom_tasks');
     if(ct && typeof ct==='object'){ customTasks=ct; localStorage.setItem('hm_cust',JSON.stringify(customTasks)); }
 
-    // ── Charger taskOverrides ──
-    const ov=await _sb.get('hm_app_data','hm_task_overrides');
+    // ── taskOverrides ──
+    const ov = await _sb.get('hm_app_data','hm_task_overrides');
     if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides)); }
 
-    // ── Charger completions admin ──
+    // ── Completions : admin fusionne tout, user charge les siennes ──
     if(isDirecteur()){
-      const rows=await _sb.getAll('hm_completions');
-      if(rows){ let merged={}; rows.forEach(r=>{ if(r.data&&typeof r.data==='object')Object.assign(merged,r.data); }); completions=merged; }
-      if(currentUser){ renderTasks();renderProgressBar();renderDashboard(); }
+      const rows = await _sb.getAll('hm_completions');
+      if(rows && rows.length>0){
+        let merged={};
+        rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+        completions=merged;
+      }
+      if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
     } else if(currentUser){
       const uid=currentUser.id;
-      const myComp=await _sb.get('hm_completions',uid);
-      if(myComp){ completions=myComp; localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions)); renderTasks();renderProgressBar(); }
+      const myComp = await _sb.get('hm_completions',uid);
+      if(myComp && typeof myComp==='object'){
+        completions=myComp;
+        localStorage.setItem('hm_comp_'+uid, JSON.stringify(completions));
+        renderTasks(); renderProgressBar();
+      }
     }
 
     // ── Listeners temps réel ──
+
+    // hm_completions : admin reçoit chaque coche en temps réel
     _sb.on('hm_completions', async ()=>{
-      if(isDirecteur()){
-        const rows=await _sb.getAll('hm_completions');
-        if(rows){ let merged={}; rows.forEach(r=>{ if(r.data&&typeof r.data==='object')Object.assign(merged,r.data); }); completions=merged; }
-        if(currentUser){ renderTasks();renderProgressBar();renderDashboard(); }
-        if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events')||{}; renderLivePanelFromEvents(evts); }
+      if(!isDirecteur()) return;
+      const rows = await _sb.getAll('hm_completions');
+      if(rows){
+        let merged={};
+        rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+        completions=merged;
       }
+      if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
+      if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events')||{}; renderLivePanelFromEvents(evts); }
     });
-    _sb.on('hm_events', async (payload)=>{
-      if(!isDirecteur())return;
-      const evts=await _sb.get('hm_app_data','hm_events')||{};
-      _eventsCache=evts;
+
+    // hm_events : toast + live panel admin
+    _sb.on('hm_events', async ()=>{
+      if(!isDirecteur()) return;
+      const evts = await _sb.get('hm_app_data','hm_events') || {};
+      _eventsCache = evts;
       if(_livePanel){ renderLivePanelFromEvents(evts); }
       if(currentUser) renderDashboard();
       if(!_livePanel){
         const today=new Date().toISOString().slice(0,10);
-        const recent=Object.values(evts).filter(e=>e&&e.period===today&&e.isDone).sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
-        if(recent){ const age=(Date.now()-new Date(recent.completedAt).getTime())/1000; if(age<8)showToast('✅ '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35),recent.couleur||'#27ae60'); }
-      }
-    });
-    _sb.on('hm_app_data', async (payload)=>{
-      if(payload.new?.key==='hm_users'){
-        const d=payload.new?.data; if(d&&Array.isArray(d)){usersData=d;localStorage.setItem('hm_users',JSON.stringify(d));renderUsersList();}
-      }
-      if(payload.new?.key==='hm_custom_roles'){
-        const d=payload.new?.data; if(d&&Array.isArray(d)){customRoles=d;localStorage.setItem('hm_custom_roles',JSON.stringify(d));renderCustomRolesList();renderDashboard();renderSidebar();}
+        const recent=Object.values(evts)
+          .filter(e=>e&&e.period===today&&e.isDone)
+          .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
+        if(recent){
+          const age=(Date.now()-new Date(recent.completedAt).getTime())/1000;
+          if(age<8) showToast('✅ '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
+        }
       }
     });
 
-  }catch(err){
+    // hm_app_data : users et customRoles temps réel
+    _sb.on('hm_app_data', async (payload)=>{
+      const key = payload.new?.key || payload.old?.key;
+      if(key==='hm_users'){
+        const d=payload.new?.data;
+        if(d && Array.isArray(d)){ usersData=d; localStorage.setItem('hm_users',JSON.stringify(d)); renderUsersList(); }
+      }
+      if(key==='hm_custom_roles'){
+        const d=payload.new?.data;
+        if(d && Array.isArray(d)){ customRoles=d; localStorage.setItem('hm_custom_roles',JSON.stringify(d)); renderCustomRolesList(); renderDashboard(); renderSidebar(); }
+      }
+    });
+
+  } catch(err){
     showFirebaseStatus('❌ Erreur Supabase : '+err.message,'#e74c3c');
-    showToast('Erreur Supabase : '+err.message,'#e74c3c');
-    _fbConnected=false;_fbDb=null;_sbClient=null;
+    showToast('❌ Erreur Supabase : '+err.message,'#e74c3c');
+    _fbConnected=false; _fbDb=null; _sbClient=null;
   }
 }
+
 function initFirebaseOnStartup(){
-  const cfg=loadFirebaseConfig();
-  // Clés Supabase pré-configurées (Mohamed - Marjane Tanger Médina)
+  // Clés pré-configurées — Marjane Tanger Médina
   const defaultCfg={
     projectUrl:'https://kipfcdhraasuuksypfyu.supabase.co',
     anonKey:'sb_publishable__tvkohWyHFGl8Yv9t3G9Uw_2cn-FXH4'
   };
-  const activeCfg=cfg||defaultCfg;
-  if(!cfg){ localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg)); }
-  setTimeout(()=>initSupabase(activeCfg),300);
+  const cfg = loadFirebaseConfig() || defaultCfg;
+  if(!loadFirebaseConfig()) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
+  setTimeout(()=>initSupabase(cfg), 300);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2441,14 +2462,15 @@ function pushTaskEventToAdmin(tid, freq, isDone, task, role, now){
     completedAt:now.toISOString(),
     period:periodKey(freq)
   };
-  // Supabase : écrire l'événement dans hm_events + stocker le dict complet dans hm_app_data
+  // Supabase : écrire l'événement dans hm_events
   if(_sbClient&&_fbConnected){
     const eventKey=uid+'__'+role.id+'__'+tid+'__'+periodKey(freq);
-    // Upsert ligne individuelle pour le realtime listener
-    _sbClient.from('hm_events').upsert({id:eventKey,data:event}).catch(()=>{});
-    // Mettre à jour aussi le dict global pour le dashboard admin
+    // Upsert ligne pour le realtime listener
+    _sbClient.from('hm_events').upsert({id:eventKey, data:event})
+      .then(({error})=>{ if(error) console.warn('events upsert:',error.message); });
+    // Mettre à jour le dict global (pour le dashboard admin)
     _sb.get('hm_app_data','hm_events').then(existing=>{
-      const all=existing&&typeof existing==='object'?existing:{};
+      const all=(existing&&typeof existing==='object')?existing:{};
       if(isDone){all[eventKey]=event;}else{delete all[eventKey];}
       _sb.set('hm_app_data','hm_events',all);
     });
@@ -2464,7 +2486,7 @@ function pushTaskEventToAdmin(tid, freq, isDone, task, role, now){
 }
 
 function broadcastUpdate(){
-  // Conservé pour compatibilité (Supabase) avec saveCustomTask / delCustom
+  // Conservé pour compatibilité avec saveCustomTask / delCustom
   const uid=currentUser?currentUser.id:'guest';
   if(_fbDb&&_fbConnected&&isDirecteur()){
     const snapshot=buildLiveSnapshot();
@@ -2515,11 +2537,9 @@ function openLivePanel(){
       _sb.getAll('hm_completions'),
       _sb.get('hm_app_data','hm_events')
     ]).then(([rows,evts])=>{
-      if(rows){let merged={};rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);});completions=merged;}
+      if(rows && rows.length>0){ let merged={}; rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);}); completions=merged; }
       renderLivePanelFromEvents(evts||{});
-    }).catch(()=>{
-      renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}'));
-    });
+    }).catch(()=>{ renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}')); });
   } else {
     renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}'));
   }
@@ -2528,8 +2548,7 @@ function openLivePanel(){
 
 function startLivePolling(){
   stopLivePolling();
-  // Supabase : le realtime est géré dans initSupabase > _sb.on('hm_events')
-  // Le polling local reste en fallback
+  // Supabase realtime géré dans initSupabase
   startLocalPolling();
 }
 
@@ -2669,14 +2688,12 @@ function renderLivePanel(snap,updatedAt,byUser){
     const now=new Date(updatedAt).toLocaleTimeString("fr-FR");
     lastEl.textContent=`Màj ${now}`+(byUser?` — ${byUser}`:"");
   }
-  // Lire les événements depuis Firebase ou localStorage et afficher
-  if(_fbDb&&_fbConnected){
-    _sb.get('hm_app_data','hm_events').then(s=>{
-      const evts=s.val()||{};
-      renderLivePanelFromEvents(evts);
+  // Lire les événements depuis Supabase ou localStorage et afficher
+  if(_sbClient&&_fbConnected){
+    _sb.get('hm_app_data','hm_events').then(evts=>{
+      renderLivePanelFromEvents(evts||{});
     }).catch(()=>{
-      const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
-      renderLivePanelFromEvents(evts);
+      renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}'));
     });
   } else {
     const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
@@ -2718,7 +2735,6 @@ function doLogin(){
     errEl.style.color = '#f39c12';
     // Attendre max 4 secondes que Firebase charge
     _sb.get('hm_app_data','hm_users').then(function(fbUsers){
-      fbUsers = fbUsers;
       if(fbUsers && Array.isArray(fbUsers) && fbUsers.length > 0){
         usersData = fbUsers;
         localStorage.setItem('hm_users', JSON.stringify(usersData));
