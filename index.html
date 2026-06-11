@@ -1199,35 +1199,7 @@ function onLoginSuccess(){
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
 
-      // ── Abonnement temps réel pour les users : recevoir les nouvelles tâches de l'admin ──
-      _sb.on('hm_app_data', async (payload)=>{
-        const key = payload.new?.key || payload.old?.key;
-        if(key==='hm_custom_tasks'){
-          const d=payload.new?.data;
-          if(d && typeof d==='object'){
-            customTasks=d;
-            localStorage.setItem('hm_cust',JSON.stringify(d));
-            renderTasks(); renderProgressBar();
-            showToast('📋 Nouvelles tâches reçues','#2980b9');
-          }
-        }
-        if(key==='hm_task_overrides'){
-          const d=payload.new?.data;
-          if(d && typeof d==='object'){
-            taskOverrides=d;
-            localStorage.setItem('hm_overrides',JSON.stringify(d));
-            renderTasks();
-          }
-        }
-        if(key==='hm_custom_roles'){
-          const d=payload.new?.data;
-          if(d && Array.isArray(d)){
-            customRoles=d;
-            localStorage.setItem('hm_custom_roles',JSON.stringify(d));
-            renderDashboard(); renderSidebar();
-          }
-        }
-      });
+      // Note : le listener hm_app_data est géré globalement dans initSupabase (re-fetch systématique)
     }
   }
 
@@ -2523,22 +2495,23 @@ async function initSupabase(cfg){
     // ── Listeners temps réel ──
 
     // hm_completions : admin reçoit chaque coche en temps réel, user reçoit reset admin
+    // hm_completions : re-fetch systématique (payload.new.data souvent null en jsonb)
     _sb.on('hm_completions', async (payload)=>{
       const changedUserId = payload.new?.user_id || payload.old?.user_id;
       if(isDirecteur()){
         // Admin : refusionner toutes les completions
-        const rows = await _sb.getAll('hm_completions');
-        if(rows){
+        const rows = await _sb.getAll('hm_completions').catch(()=>[]);
+        if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
           completions=merged;
           localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
         }
         if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
-        if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events')||{}; renderLivePanelFromEvents(evts); }
+        if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events').catch(()=>null)||{}; renderLivePanelFromEvents(evts); }
       } else if(currentUser && changedUserId===currentUser.id){
         // User : sa propre ligne a été modifiée (reset par admin)
-        const myComp = await _sb.get('hm_completions', currentUser.id);
+        const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
         if(myComp && typeof myComp==='object'){
           completions=myComp;
           localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
@@ -2567,50 +2540,69 @@ async function initSupabase(cfg){
       }
     });
 
-    // hm_app_data : users et customRoles/customTasks temps réel
+    // hm_app_data : sync temps réel — re-fetch systématique (payload.new.data peut être null en jsonb)
     _sb.on('hm_app_data', async (payload)=>{
       const key = payload.new?.key || payload.old?.key;
+      if(!key) return;
+
+      // Re-fetch la valeur réelle depuis Supabase (ne jamais faire confiance à payload.new.data)
+      const fresh = await _sb.get('hm_app_data', key).catch(()=>null);
+      if(fresh === null) return; // erreur réseau, ignorer
+
       if(key==='hm_users'){
-        const d=payload.new?.data;
-        if(d && Array.isArray(d)){
-          usersData=d;
-          localStorage.setItem('hm_users',JSON.stringify(d));
-          renderUsersList();
+        if(Array.isArray(fresh)){
+          // Fusion intelligente : préserver les hashs modifiés localement
+          const localById={};
+          usersData.forEach(u=>{ localById[u.id]=u; });
+          usersData = fresh.map(u=>{
+            const local = localById[u.id];
+            if(local && local._pwChanged) return {...u, passwordHash:local.passwordHash, _pwChanged:true};
+            return u;
+          });
+          localStorage.setItem('hm_users', JSON.stringify(usersData));
+          if(isDirecteur()) renderUsersList();
+          // Si l'user courant est dans la nouvelle liste, mettre à jour son profil
+          if(currentUser){
+            const updated = usersData.find(u=>u.id===currentUser.id);
+            if(updated){ currentUser=updated; updateHeaderUser(); }
+          }
+          showToast('👥 Liste utilisateurs mise à jour','#3ecf8e');
         }
       }
-      if(key==='hm_custom_roles'){
-        const d=payload.new?.data;
-        if(d && Array.isArray(d)){
-          customRoles=d;
-          localStorage.setItem('hm_custom_roles',JSON.stringify(d));
-          renderCustomRolesList(); renderDashboard(); renderSidebar();
+      else if(key==='hm_custom_roles'){
+        if(Array.isArray(fresh)){
+          customRoles=fresh;
+          localStorage.setItem('hm_custom_roles',JSON.stringify(fresh));
+          if(isDirecteur()) renderCustomRolesList();
+          renderDashboard(); renderSidebar();
         }
       }
-      if(key==='hm_custom_tasks'){
-        const d=payload.new?.data;
-        if(d && typeof d==='object'){
-          customTasks=d;
-          localStorage.setItem('hm_cust',JSON.stringify(d));
-          if(!isDirecteur()){ renderTasks(); renderProgressBar(); showToast('📋 Nouvelles tâches reçues','#2980b9'); }
+      else if(key==='hm_custom_tasks'){
+        if(fresh && typeof fresh==='object'){
+          customTasks=fresh;
+          localStorage.setItem('hm_cust',JSON.stringify(fresh));
+          renderTasks(); renderProgressBar();
+          if(!isDirecteur()) showToast('📋 Nouvelles tâches reçues','#2980b9');
         }
       }
-      if(key==='hm_task_overrides'){
-        const d=payload.new?.data;
-        if(d && typeof d==='object'){
-          taskOverrides=d;
-          localStorage.setItem('hm_overrides',JSON.stringify(d));
-          if(!isDirecteur()){ renderTasks(); }
+      else if(key==='hm_task_overrides'){
+        if(fresh && typeof fresh==='object'){
+          taskOverrides=fresh;
+          localStorage.setItem('hm_overrides',JSON.stringify(fresh));
+          renderTasks();
         }
       }
-      if(key==='hm_company'){
-        const d=payload.new?.data;
-        if(d && typeof d==='object'){
-          Object.assign(companyData,d);
+      else if(key==='hm_company'){
+        if(fresh && typeof fresh==='object'){
+          Object.assign(companyData,fresh);
           localStorage.setItem('hm_company',JSON.stringify(companyData));
           updateHeaderCompany();
         }
       }
     });
+
+    // ── Démarrer le polling de secours (fallback si Realtime défaillant) ──
+    startSupabasePoll();
 
   } catch(err){
     showFirebaseStatus('❌ Erreur Supabase : '+err.message,'#e74c3c');
@@ -2796,6 +2788,64 @@ function stopLivePolling(){
   if(_livePollInterval){clearInterval(_livePollInterval);_livePollInterval=null;}
   if(_liveChannel){_liveChannel.close();_liveChannel=null;}
   if(_fbLiveRef&&_fbUnsubscribe){try{_fbLiveRef.off('value',_fbUnsubscribe);}catch(e){}}_fbLiveRef=null;_fbUnsubscribe=null;
+}
+
+// ── Polling de secours Supabase (fallback si Realtime WebSocket défaillant) ──
+let _sbPollInterval=null;
+let _sbPollUsers=null, _sbPollCustomTasks=null, _sbPollCustomRoles=null;
+function startSupabasePoll(){
+  if(!_sbClient||!_fbConnected) return;
+  if(_sbPollInterval) clearInterval(_sbPollInterval);
+  _sbPollInterval = setInterval(async()=>{
+    if(!_sbClient||!_fbConnected) return;
+    try{
+      // Vérifier hm_users
+      const users = await _sb.get('hm_app_data','hm_users').catch(()=>null);
+      if(users && Array.isArray(users)){
+        const newHash = JSON.stringify(users.map(u=>u.id+u.active+u.name+u.username));
+        if(newHash !== _sbPollUsers){
+          _sbPollUsers = newHash;
+          const localById={};
+          usersData.forEach(u=>{ localById[u.id]=u; });
+          usersData = users.map(u=>{
+            const local = localById[u.id];
+            if(local && local._pwChanged) return {...u, passwordHash:local.passwordHash, _pwChanged:true};
+            return u;
+          });
+          localStorage.setItem('hm_users', JSON.stringify(usersData));
+          if(isDirecteur()) renderUsersList();
+          if(currentUser){
+            const updated = usersData.find(u=>u.id===currentUser.id);
+            if(updated){ currentUser=updated; updateHeaderUser(); }
+          }
+        }
+      }
+      // Vérifier hm_custom_tasks
+      const ct = await _sb.get('hm_app_data','hm_custom_tasks').catch(()=>null);
+      if(ct && typeof ct==='object'){
+        const newHash = JSON.stringify(ct);
+        if(newHash !== _sbPollCustomTasks){
+          _sbPollCustomTasks = newHash;
+          customTasks = ct;
+          localStorage.setItem('hm_cust', JSON.stringify(ct));
+          renderTasks(); renderProgressBar();
+          if(!isDirecteur()) showToast('📋 Tâches mises à jour','#2980b9');
+        }
+      }
+      // Vérifier hm_custom_roles
+      const cr = await _sb.get('hm_app_data','hm_custom_roles').catch(()=>null);
+      if(cr && Array.isArray(cr)){
+        const newHash = JSON.stringify(cr.map(r=>r.id));
+        if(newHash !== _sbPollCustomRoles){
+          _sbPollCustomRoles = newHash;
+          customRoles = cr;
+          localStorage.setItem('hm_custom_roles', JSON.stringify(cr));
+          renderDashboard(); renderSidebar();
+          if(isDirecteur()) renderCustomRolesList();
+        }
+      }
+    }catch(e){}
+  }, 30000); // toutes les 30 secondes
 }
 
 // ── Nouveau rendu : basé sur les événements tâches (hm_events) ──
