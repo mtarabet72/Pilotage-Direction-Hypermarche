@@ -1,216 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<!-- Playables SDK -->
-<script>// Playables SDK v1.0.0
-// Game lifecycle bridge: rAF-based game-ready detection + event communication
-(function() {
-  'use strict';
-
-  // Idempotency: skip if already initialized (e.g., server-side injection
-  // followed by client-side inject-javascript via the Bloks webview component).
-  if (window.playablesSDK) return;
-
-  var HANDLER_NAME = 'playablesGameEventHandler';
-  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
-  var RAF_FRAME_THRESHOLD = 3;
-
-  var gameReadySent = false;
-  var firstInteractionSent = false;
-  var errorSent = false;
-  var frameCount = 0;
-  var originalRAF = window.requestAnimationFrame;
-
-  // --- Transport Layer ---
-
-  function hasIOSBridge() {
-    return !!(window.webkit &&
-              window.webkit.messageHandlers &&
-              window.webkit.messageHandlers[HANDLER_NAME]);
-  }
-
-  function hasAndroidBridge() {
-    return !!(window[ANDROID_BRIDGE_NAME] &&
-              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
-  }
-
-  function isInIframe() {
-    return !!(window.parent && window.parent !== window);
-  }
-
-  function sendEvent(eventName, payload) {
-    var message = {
-      type: eventName,
-      payload: payload || {},
-      timestamp: Date.now()
-    };
-
-    if (hasIOSBridge()) {
-      try {
-        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
-      } catch (e) { /* ignore */ }
-      return;
-    }
-
-    if (hasAndroidBridge()) {
-    try {
-      var p = payload || {};
-      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
-      p.timestamp = message.timestamp;
-      window[ANDROID_BRIDGE_NAME].postEvent(
-        eventName,
-        JSON.stringify(p)
-      );
-    } catch (e) { /* ignore */ }
-    return;
-  }
-
-    if (isInIframe()) {
-      try {
-        window.parent.postMessage(message, '*');
-      } catch (e) { /* ignore */ }
-      return;
-    }
-  }
-
-  // --- rAF Game-Ready Detection ---
-
-  function onFrame() {
-    if (gameReadySent) return;
-
-    frameCount++;
-    if (frameCount >= RAF_FRAME_THRESHOLD) {
-      gameReadySent = true;
-      sendEvent('game_ready', {
-        frame_count: frameCount,
-        detected_at: Date.now()
-      });
-      return;
-    }
-
-    originalRAF.call(window, onFrame);
-  }
-
-  if (originalRAF) {
-    window.requestAnimationFrame = function(callback) {
-      if (!gameReadySent) {
-        return originalRAF.call(window, function(timestamp) {
-          frameCount++;
-          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
-            gameReadySent = true;
-            sendEvent('game_ready', {
-              frame_count: frameCount,
-              detected_at: Date.now()
-            });
-          }
-          callback(timestamp);
-        });
-      }
-      return originalRAF.call(window, callback);
-    };
-  }
-
-  // --- First User Interaction Detection ---
-
-  function setupFirstInteractionDetection() {
-    var events = ['touchstart', 'mousedown', 'keydown'];
-
-    function onFirstInteraction() {
-      if (firstInteractionSent) return;
-      firstInteractionSent = true;
-      sendEvent('user_interaction_start', null);
-
-      for (var i = 0; i < events.length; i++) {
-        document.removeEventListener(events[i], onFirstInteraction, true);
-      }
-    }
-
-    for (var i = 0; i < events.length; i++) {
-      document.addEventListener(events[i], onFirstInteraction, true);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
-  } else {
-    setupFirstInteractionDetection();
-  }
-
-  // --- Auto Error Capture ---
-
-  window.addEventListener('error', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    sendEvent('error', {
-      message: event.message || 'Unknown error',
-      source: event.filename || '',
-      lineno: event.lineno || 0,
-      colno: event.colno || 0,
-      auto_captured: true
-    });
-  });
-
-  window.addEventListener('unhandledrejection', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    var reason = event.reason;
-    sendEvent('error', {
-      message: (reason instanceof Error) ? reason.message : String(reason),
-      type: 'unhandled_promise_rejection',
-      auto_captured: true
-    });
-  });
-
-  // --- Public API ---
-
-  window.playablesSDK = {
-    complete: function(score) {
-      sendEvent('game_ended', {
-        score: score,
-        completed: true
-      });
-    },
-
-    error: function(message) {
-      if (errorSent) return;
-      errorSent = true;
-      sendEvent('error', {
-        message: message || 'Unknown error',
-        auto_captured: false
-      });
-    },
-
-    sendEvent: function(eventName, payload) {
-      if (!eventName || typeof eventName !== 'string') return;
-      sendEvent(eventName, payload);
-    }
-  };
-
-  // Kick off rAF detection in case no game code calls rAF immediately
-  if (originalRAF) {
-    originalRAF.call(window, onFrame);
-  }
-})();</script>
-<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
-(function() {
-  if (window.__playableTouchPatchInstalled) return;
-  window.__playableTouchPatchInstalled = true;
-  var origAdd = EventTarget.prototype.addEventListener;
-  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (blockedTypes[type]) {
-      if (options === undefined || options === null) {
-        options = { passive: true };
-      } else if (typeof options === 'boolean') {
-        options = { capture: options, passive: true };
-      } else {
-        options = Object.assign({}, options, { passive: true });
-      }
-    }
-    return origAdd.call(this, type, listener, options);
-  };
-})();
-</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1101,8 +891,9 @@ function hashStr(s){
 // INIT & STORAGE
 // ══════════════════════════════════════════════════════════════
 function loadData(){
-  // Les completions sont rechargées après login dans onLoginSuccess()
-  try{completions=JSON.parse(localStorage.getItem("hm_comp")||"{}");}catch(e){}
+  // Les completions complètes sont rechargées depuis Supabase après login dans onLoginSuccess()
+  // Ici on charge uniquement les données structurelles (tâches, rôles, config)
+  try{completions={};}catch(e){}  // reset — sera rempli par onLoginSuccess
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
   try{taskOverrides=JSON.parse(localStorage.getItem("hm_overrides")||"{}");}catch(e){}
@@ -1128,23 +919,38 @@ function loadData(){
 }
 function saveData(){
   const uid=currentUser?currentUser.id:'guest';
-  // ── 1. Supabase en priorité
+  // ── Miroir localStorage (toujours, pour fallback offline) ──
+  try{
+    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+    localStorage.setItem("hm_comp",JSON.stringify(completions));
+    localStorage.setItem("hm_cust",JSON.stringify(customTasks));
+    localStorage.setItem("hm_log",JSON.stringify(completionLog));
+    localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
+  }catch(e){}
+  // ── Supabase PRIORITAIRE ──
   if(_sbClient && _fbConnected){
-    _sb.set('hm_completions', uid, completions);
-    _sb.set('hm_app_data','hm_custom_tasks', customTasks);
-    _sb.set('hm_app_data','hm_task_overrides', taskOverrides);
-    _sb.set('hm_app_data','hm_log', completionLog);
+    // Completions : chaque user écrit sa propre ligne
+    _sb.set('hm_completions', uid, completions).catch(()=>{});
+    // Tâches custom et overrides : écrit par l'admin uniquement
+    if(isDirecteur()){
+      _sb.set('hm_app_data','hm_custom_tasks', customTasks).catch(()=>{});
+      _sb.set('hm_app_data','hm_task_overrides', taskOverrides).catch(()=>{});
+    }
+  } else if(!_sbClient){
+    // Pas de Supabase configuré : localStorage uniquement, pas de warning
   }
-  // ── 2. Cache local
-  localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-  localStorage.setItem("hm_comp",JSON.stringify(completions));
-  localStorage.setItem("hm_cust",JSON.stringify(customTasks));
-  localStorage.setItem("hm_log",JSON.stringify(completionLog));
-  localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
+}
+function saveCompanyData(){
+  try{localStorage.setItem("hm_company", JSON.stringify(companyData));}catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_company', companyData).catch(()=>{});
+  }
 }
 function saveCustomRoles(){
-  localStorage.setItem("hm_custom_roles", JSON.stringify(customRoles));
-  if(_sbClient && _fbConnected){ _sb.set('hm_app_data','hm_custom_roles', customRoles); }
+  try{localStorage.setItem("hm_custom_roles", JSON.stringify(customRoles));}catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_custom_roles', customRoles).catch(()=>{});
+  }
 }
 // ══════════════════════════════════════════════════════════════
 // GESTION DES DÉPARTEMENTS PERSONNALISÉS
@@ -1304,7 +1110,7 @@ function renderCustomRolesList(){
 
 
 function saveUsers(){
-  localStorage.setItem("hm_users", JSON.stringify(usersData));
+  try{localStorage.setItem("hm_users", JSON.stringify(usersData));}catch(e){}
   if(_sbClient && _fbConnected){
     _sb.set('hm_app_data','hm_users', usersData)
       .then(()=>{ window._usersSyncPending=false; })
@@ -1341,26 +1147,88 @@ function showLoginScreen(){
 // doLogin() déplacé plus haut avec les listeners
 function onLoginSuccess(){
   const uid=currentUser?currentUser.id:'guest';
+  // Charger les completions locales comme base initiale
   try{ const s=localStorage.getItem('hm_comp_'+uid); completions=s?JSON.parse(s):{}; }catch(e){completions={};}
 
-  // Supabase : charger completions + events si connecté
-  if(_sbClient && _fbConnected && isDirecteur()){
-    Promise.all([
-      _sb.getAll('hm_completions'),
-      _sb.get('hm_app_data','hm_events')
-    ]).then(([rows,evts])=>{
-      if(rows && rows.length>0){ let merged={}; rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);}); completions=merged; }
-      if(evts && typeof evts==='object') _eventsCache=evts;
-      renderTasks(); renderProgressBar(); renderDashboard();
-    }).catch(()=>{});
-  } else if(_sbClient && _fbConnected){
-    _sb.get('hm_completions',uid).then(myComp=>{
-      if(myComp && typeof myComp==='object'){
-        completions=myComp;
-        localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-        renderTasks(); renderProgressBar();
-      }
-    }).catch(()=>{});
+  // ── Supabase : charger et s'abonner selon le rôle ──
+  if(_sbClient && _fbConnected){
+    if(isDirecteur()){
+      // Admin : fusionner toutes les completions + events
+      Promise.all([
+        _sb.getAll('hm_completions'),
+        _sb.get('hm_app_data','hm_events'),
+        _sb.get('hm_app_data','hm_custom_tasks'),
+        _sb.get('hm_app_data','hm_task_overrides')
+      ]).then(([rows,evts,ct,ov])=>{
+        if(rows && rows.length>0){
+          let merged={};
+          rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);});
+          completions=merged;
+          localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+        }
+        if(evts && typeof evts==='object') _eventsCache=evts;
+        if(ct && typeof ct==='object'){
+          customTasks=ct;
+          localStorage.setItem('hm_cust',JSON.stringify(customTasks));
+        }
+        if(ov && typeof ov==='object'){
+          taskOverrides=ov;
+          localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides));
+        }
+        renderTasks(); renderProgressBar(); renderDashboard();
+      }).catch(()=>{});
+    } else {
+      // User standard : charger ses completions + tâches custom + overrides
+      Promise.all([
+        _sb.get('hm_completions', uid),
+        _sb.get('hm_app_data','hm_custom_tasks'),
+        _sb.get('hm_app_data','hm_task_overrides')
+      ]).then(([myComp, ct, ov])=>{
+        if(myComp && typeof myComp==='object'){
+          completions=myComp;
+          localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+        }
+        if(ct && typeof ct==='object'){
+          customTasks=ct;
+          localStorage.setItem('hm_cust',JSON.stringify(customTasks));
+        }
+        if(ov && typeof ov==='object'){
+          taskOverrides=ov;
+          localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides));
+        }
+        renderTasks(); renderProgressBar(); renderDashboard();
+      }).catch(()=>{});
+
+      // ── Abonnement temps réel pour les users : recevoir les nouvelles tâches de l'admin ──
+      _sb.on('hm_app_data', async (payload)=>{
+        const key = payload.new?.key || payload.old?.key;
+        if(key==='hm_custom_tasks'){
+          const d=payload.new?.data;
+          if(d && typeof d==='object'){
+            customTasks=d;
+            localStorage.setItem('hm_cust',JSON.stringify(d));
+            renderTasks(); renderProgressBar();
+            showToast('📋 Nouvelles tâches reçues','#2980b9');
+          }
+        }
+        if(key==='hm_task_overrides'){
+          const d=payload.new?.data;
+          if(d && typeof d==='object'){
+            taskOverrides=d;
+            localStorage.setItem('hm_overrides',JSON.stringify(d));
+            renderTasks();
+          }
+        }
+        if(key==='hm_custom_roles'){
+          const d=payload.new?.data;
+          if(d && Array.isArray(d)){
+            customRoles=d;
+            localStorage.setItem('hm_custom_roles',JSON.stringify(d));
+            renderDashboard(); renderSidebar();
+          }
+        }
+      });
+    }
   }
 
   document.getElementById('login-overlay').classList.add('hidden');
@@ -1811,7 +1679,19 @@ function toggleTask(tid,freq){
     completionLog.push({roleId:currentRoleId,roleLabel:r.label,secteur:r.secteur,taskId:tid,taskLabel:task.label,freq,period:periodKey(freq),completedAt:now.toISOString(),evaluatedBy:currentUser?.id,userId:currentUser?.id});
     if(completionLog.length>5000)completionLog=completionLog.slice(-5000);
   } else {completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===tid&&e.period===periodKey(freq)&&e.userId===currentUser?.id));}
-  saveData();
+
+  // ── Sauvegarder : localStorage immédiat + Supabase si connecté ──
+  try{
+    const uid=currentUser?currentUser.id:'guest';
+    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+    localStorage.setItem("hm_comp",JSON.stringify(completions));
+    localStorage.setItem("hm_log",JSON.stringify(completionLog));
+  }catch(e){}
+  if(_sbClient && _fbConnected){
+    const uid=currentUser?currentUser.id:'guest';
+    _sb.set('hm_completions', uid, completions).catch(()=>{});
+  }
+
   // ── Notification temps réel vers l'admin ──
   pushTaskEventToAdmin(tid, freq, isDone, task, r, now);
   renderTasks();renderRoleHeader();renderProgressBar();renderSidebar();
@@ -2290,7 +2170,7 @@ function buildReportHTML(forPrint=false){
   const cd=companyData,gPct=totalTasks?Math.round(totalDone/totalTasks*100):0;
   const logoHtml=cd.logo?`<img src="${cd.logo}" style="height:50px;border-radius:6px;" alt="Logo">`:`<span style="font-size:28px;">🏬</span>`;
   const dirBlock=cd.directorName?`<div><span style="font-size:10px;opacity:.6;">Directeur</span><br><span style="font-size:13px;font-weight:700;">${cd.directorName}${cd.directorTitle?' — '+cd.directorTitle:''}</span></div>`:'';
-  return `<!DOCTYPE html><html lang="fr"><head><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script><meta charset="UTF-8"><title>Rapport — ${periodLabel}</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1f2e;padding:${forPrint?"0":"20px"};}@page{margin:15mm 12mm;size:A4;}@media print{body{padding:0;}}</style></head><body>
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport — ${periodLabel}</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1f2e;padding:${forPrint?"0":"20px"};}@page{margin:15mm 12mm;size:A4;}@media print{body{padding:0;}}</style></head><body>
   <div style="background:linear-gradient(135deg,#0a1628,#0d3060);color:#fff;padding:18px 22px;border-radius:${forPrint?"0":"8px 8px 0 0"};">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">${logoHtml}<div><div style="font-size:16px;font-weight:900;">${cd.nom||'RAPPORT DE SUIVI DES TÂCHES'}</div>${cd.address?`<div style="font-size:11px;opacity:.7;">${cd.address}</div>`:''}</div></div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">
@@ -2449,8 +2329,21 @@ function confirmReset(){
   if(!confirm('⚠️ Réinitialiser TOUTES les données de suivi ?\n\nLes utilisateurs et paramètres sont conservés.'))return;
   if(!confirm('Confirmer la réinitialisation ?'))return;
   completions={};customTasks={};completionLog=[];taskOverrides={};
-  Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&!['hm_users','hm_company'].includes(k))localStorage.removeItem(k);});
-  saveData();renderDashboard();showToast('Données réinitialisées');
+  // Effacer localStorage
+  Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&!['hm_users','hm_company','hm_sb_cfg'].includes(k))localStorage.removeItem(k);});
+  // Effacer Supabase si connecté
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_custom_tasks',{}).catch(()=>{});
+    _sb.set('hm_app_data','hm_task_overrides',{}).catch(()=>{});
+    // Effacer toutes les completions (écrire un objet vide pour chaque user)
+    _sb.getAll('hm_completions').then(rows=>{
+      if(rows) rows.forEach(r=>{ _sb.set('hm_completions', r.user_id||r.key, {}).catch(()=>{}); });
+    }).catch(()=>{});
+    showToast('🗑️ Données réinitialisées (Supabase + Local)','#e74c3c');
+  } else {
+    showToast('Données réinitialisées (local)','#e74c3c');
+  }
+  saveData();renderDashboard();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2600,6 +2493,14 @@ async function initSupabase(cfg){
     const ov = await _sb.get('hm_app_data','hm_task_overrides');
     if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides)); }
 
+    // ── companyData ──
+    const cd = await _sb.get('hm_app_data','hm_company');
+    if(cd && typeof cd==='object'){
+      Object.assign(companyData, cd);
+      localStorage.setItem('hm_company',JSON.stringify(companyData));
+      updateHeaderCompany();
+    }
+
     // ── Completions : admin fusionne tout, user charge les siennes ──
     if(isDirecteur()){
       const rows = await _sb.getAll('hm_completions');
@@ -2621,17 +2522,30 @@ async function initSupabase(cfg){
 
     // ── Listeners temps réel ──
 
-    // hm_completions : admin reçoit chaque coche en temps réel
-    _sb.on('hm_completions', async ()=>{
-      if(!isDirecteur()) return;
-      const rows = await _sb.getAll('hm_completions');
-      if(rows){
-        let merged={};
-        rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
-        completions=merged;
+    // hm_completions : admin reçoit chaque coche en temps réel, user reçoit reset admin
+    _sb.on('hm_completions', async (payload)=>{
+      const changedUserId = payload.new?.user_id || payload.old?.user_id;
+      if(isDirecteur()){
+        // Admin : refusionner toutes les completions
+        const rows = await _sb.getAll('hm_completions');
+        if(rows){
+          let merged={};
+          rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+          completions=merged;
+          localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
+        }
+        if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
+        if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events')||{}; renderLivePanelFromEvents(evts); }
+      } else if(currentUser && changedUserId===currentUser.id){
+        // User : sa propre ligne a été modifiée (reset par admin)
+        const myComp = await _sb.get('hm_completions', currentUser.id);
+        if(myComp && typeof myComp==='object'){
+          completions=myComp;
+          localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
+          renderTasks(); renderProgressBar(); renderDashboard();
+          showToast('🔄 Tâches synchronisées','#2980b9');
+        }
       }
-      if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
-      if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events')||{}; renderLivePanelFromEvents(evts); }
     });
 
     // hm_events : toast + live panel admin
@@ -2653,16 +2567,48 @@ async function initSupabase(cfg){
       }
     });
 
-    // hm_app_data : users et customRoles temps réel
+    // hm_app_data : users et customRoles/customTasks temps réel
     _sb.on('hm_app_data', async (payload)=>{
       const key = payload.new?.key || payload.old?.key;
       if(key==='hm_users'){
         const d=payload.new?.data;
-        if(d && Array.isArray(d)){ usersData=d; localStorage.setItem('hm_users',JSON.stringify(d)); renderUsersList(); }
+        if(d && Array.isArray(d)){
+          usersData=d;
+          localStorage.setItem('hm_users',JSON.stringify(d));
+          renderUsersList();
+        }
       }
       if(key==='hm_custom_roles'){
         const d=payload.new?.data;
-        if(d && Array.isArray(d)){ customRoles=d; localStorage.setItem('hm_custom_roles',JSON.stringify(d)); renderCustomRolesList(); renderDashboard(); renderSidebar(); }
+        if(d && Array.isArray(d)){
+          customRoles=d;
+          localStorage.setItem('hm_custom_roles',JSON.stringify(d));
+          renderCustomRolesList(); renderDashboard(); renderSidebar();
+        }
+      }
+      if(key==='hm_custom_tasks'){
+        const d=payload.new?.data;
+        if(d && typeof d==='object'){
+          customTasks=d;
+          localStorage.setItem('hm_cust',JSON.stringify(d));
+          if(!isDirecteur()){ renderTasks(); renderProgressBar(); showToast('📋 Nouvelles tâches reçues','#2980b9'); }
+        }
+      }
+      if(key==='hm_task_overrides'){
+        const d=payload.new?.data;
+        if(d && typeof d==='object'){
+          taskOverrides=d;
+          localStorage.setItem('hm_overrides',JSON.stringify(d));
+          if(!isDirecteur()){ renderTasks(); }
+        }
+      }
+      if(key==='hm_company'){
+        const d=payload.new?.data;
+        if(d && typeof d==='object'){
+          Object.assign(companyData,d);
+          localStorage.setItem('hm_company',JSON.stringify(companyData));
+          updateHeaderCompany();
+        }
       }
     });
 
@@ -2823,27 +2769,29 @@ function openLivePanel(){
 
 function startLivePolling(){
   stopLivePolling();
-  // Essayer d'abord le realtime Supabase
-  try{
-    if(_sbClient&&_fbConnected){
-      if(_liveChannel){ try{_liveChannel.unsubscribe();}catch(e){} }
-      _liveChannel=_sb.on('hm_events',()=>{ _sb.get('hm_app_data','hm_events').then(evts=>renderLivePanelFromEvents(evts||{})).catch(()=>{}); });
-      if(_liveChannel&&_liveChannel.subscribe) _liveChannel.subscribe();
-    }
-  }catch(ex){_liveChannel=null;}
-  // Polling local uniquement si Supabase déconnecté
-  if(!_sbClient || !_fbConnected){
-    _livePollInterval=setInterval(()=>{
-      try{
-        const tick=localStorage.getItem('hm_events_tick')||'';
-        if(tick===_liveLastTick) return;
-        _liveLastTick=tick;
-        const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
-        renderLivePanelFromEvents(evts);
-      }catch(e){}
-    },2000);
-  }
+  // Supabase realtime géré dans initSupabase
+  startLocalPolling();
 }
+
+let _livePollInterval=null,_liveChannel=null,_liveLastTick='';
+function startLocalPolling(){
+  try{
+    _liveChannel=new BroadcastChannel('hm_live');
+    _liveChannel.onmessage=e=>{
+      if(e.data?.events) renderLivePanelFromEvents(e.data.events);
+    };
+  }catch(ex){_liveChannel=null;}
+  _livePollInterval=setInterval(()=>{
+    try{
+      const tick=localStorage.getItem('hm_events_tick')||'';
+      if(tick===_liveLastTick) return;
+      _liveLastTick=tick;
+      const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
+      renderLivePanelFromEvents(evts);
+    }catch(e){}
+  },2000);
+}
+
 function stopLivePolling(){
   if(_livePollInterval){clearInterval(_livePollInterval);_livePollInterval=null;}
   if(_liveChannel){_liveChannel.close();_liveChannel=null;}
