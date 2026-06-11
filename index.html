@@ -1130,10 +1130,13 @@ function initAuth(){
     if(sess){
       const u=usersData.find(x=>x.id===sess.userId&&x.active);
       if(u){currentUser=u;onLoginSuccess();return;}
+      sessionStorage.removeItem('hm_session');
     }
   }catch(e){}
   showLoginScreen();
 }
+// Appele initAuth APRES que Supabase soit pret (users deja charges/fusionnes)
+function _onSupabaseReady(){ initAuth(); }
 function showLoginScreen(){
   document.getElementById('login-overlay').classList.remove('hidden');
   if(companyData.nom){document.getElementById('login-company-name').textContent=companyData.nom.toUpperCase();}
@@ -1150,16 +1153,31 @@ function onLoginSuccess(){
   // Charger les completions locales comme base initiale
   try{ const s=localStorage.getItem('hm_comp_'+uid); completions=s?JSON.parse(s):{}; }catch(e){completions={};}
 
-  // ── Supabase : charger et s'abonner selon le rôle ──
+  // ── Supabase : charger TOUT depuis Supabase au login (source de vérité) ──
   if(_sbClient && _fbConnected){
     if(isDirecteur()){
-      // Admin : fusionner toutes les completions + events
+      // Admin : charger users + completions + events + custom data
       Promise.all([
+        _sb.get('hm_app_data','hm_users'),
         _sb.getAll('hm_completions'),
         _sb.get('hm_app_data','hm_events'),
         _sb.get('hm_app_data','hm_custom_tasks'),
-        _sb.get('hm_app_data','hm_task_overrides')
-      ]).then(([rows,evts,ct,ov])=>{
+        _sb.get('hm_app_data','hm_task_overrides'),
+        _sb.get('hm_app_data','hm_custom_roles')
+      ]).then(([sbUsers,rows,evts,ct,ov,cr])=>{
+        // Users : source de vérité Supabase
+        if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
+          const localById={};
+          usersData.forEach(u=>{ localById[u.id]=u; });
+          usersData = sbUsers.map(u=>{
+            const local = localById[u.id];
+            if(local && local._pwChanged) return {...u, passwordHash:local.passwordHash, _pwChanged:true};
+            return u;
+          });
+          localStorage.setItem('hm_users',JSON.stringify(usersData));
+          renderUsersList();
+        }
+        // Completions fusionnées
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);});
@@ -1175,15 +1193,32 @@ function onLoginSuccess(){
           taskOverrides=ov;
           localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides));
         }
+        if(cr && Array.isArray(cr) && cr.length>0){
+          customRoles=cr;
+          localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
+        }
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     } else {
-      // User standard : charger ses completions + tâches custom + overrides
+      // User standard : charger users (pour voir si son compte est encore actif) + ses données
       Promise.all([
+        _sb.get('hm_app_data','hm_users'),
         _sb.get('hm_completions', uid),
         _sb.get('hm_app_data','hm_custom_tasks'),
-        _sb.get('hm_app_data','hm_task_overrides')
-      ]).then(([myComp, ct, ov])=>{
+        _sb.get('hm_app_data','hm_task_overrides'),
+        _sb.get('hm_app_data','hm_custom_roles')
+      ]).then(([sbUsers,myComp, ct, ov, cr])=>{
+        // Mettre à jour la liste users (pour les noms dans les tâches assignées)
+        if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
+          const localById={};
+          usersData.forEach(u=>{ localById[u.id]=u; });
+          usersData = sbUsers.map(u=>{
+            const local = localById[u.id];
+            if(local && local._pwChanged) return {...u, passwordHash:local.passwordHash, _pwChanged:true};
+            return u;
+          });
+          localStorage.setItem('hm_users',JSON.stringify(usersData));
+        }
         if(myComp && typeof myComp==='object'){
           completions=myComp;
           localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
@@ -1196,10 +1231,12 @@ function onLoginSuccess(){
           taskOverrides=ov;
           localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides));
         }
+        if(cr && Array.isArray(cr) && cr.length>0){
+          customRoles=cr;
+          localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
+        }
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
-
-      // Note : le listener hm_app_data est géré globalement dans initSupabase (re-fetch systématique)
     }
   }
 
@@ -2638,11 +2675,18 @@ function initFirebaseOnStartup(){
   };
   const cfg = loadFirebaseConfig() || defaultCfg;
   if(!loadFirebaseConfig()) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
-  // Bloquer le bouton immédiatement si login screen visible
+  // Bloquer le bouton login pendant le chargement Supabase
   setTimeout(()=>{ _setLoginReady(false,'Connexion Supabase...'); }, 50);
-  // Lancer Supabase — si échec après 8 sec, débloquer quand même
-  const fallback = setTimeout(()=>{ _setLoginReady(true); }, 8000);
-  initSupabase(cfg).then(()=>clearTimeout(fallback)).catch(()=>{ clearTimeout(fallback); _setLoginReady(true); });
+  let _authStarted = false;
+  function _startAuth(){ if(_authStarted) return; _authStarted=true; _onSupabaseReady(); }
+  // Fallback : si Supabase prend >8s, demarrer quand meme avec localStorage
+  const fallback = setTimeout(()=>{
+    _setLoginReady(true);
+    _startAuth();
+  }, 8000);
+  initSupabase(cfg)
+    .then(()=>{ clearTimeout(fallback); _startAuth(); })
+    .catch(()=>{ clearTimeout(fallback); _setLoginReady(true); _startAuth(); });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3069,8 +3113,10 @@ function resetLoginData(){
 loadData();
 resetPeriodicData();
 updateHeaderCompany();
+// initAuth() est appele par _onSupabaseReady() apres chargement Supabase
+// (ou apres timeout 8s si Supabase indisponible)
 initFirebaseOnStartup();
-initAuth();
+// NE PAS appeler initAuth() ici — il sera appele via _onSupabaseReady()
 
 // ── Service Worker (PWA installable) ──
 if('serviceWorker' in navigator){
