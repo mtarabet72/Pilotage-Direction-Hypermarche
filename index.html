@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcGZjZGhyYWFzdXVrc3lwZnl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDQ4MzcsImV4cCI6MjA5NjY4MDgzN30.afT15ecV0ZUMWYwNwdlGLqE6xpfKSePNQ6xUUvL68bo<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -2671,10 +2671,14 @@ function _setLoginReady(ready, msg){
 function initFirebaseOnStartup(){
   const defaultCfg={
     projectUrl:'https://kipfcdhraasuuksypfyu.supabase.co',
-    anonKey:'sb_publishable__tvkohWyHFGl8Yv9t3G9Uw_2cn-FXH4'
+    anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcGZjZGhyYWFzdXVrc3lwZnl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDQ4MzcsImV4cCI6MjA5NjY4MDgzN30.afT15ecV0ZUMWYwNwdlGLqE6xpfKSePNQ6xUUvL68bo'
   };
-  const cfg = loadFirebaseConfig() || defaultCfg;
-  if(!loadFirebaseConfig()) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
+  // Forcer la mise à jour si l'ancienne clé sb_publishable_ est encore en cache
+  const storedCfg = loadFirebaseConfig();
+  const isOldKey = storedCfg && storedCfg.anonKey && storedCfg.anonKey.startsWith('sb_');
+  if(isOldKey) localStorage.removeItem('hm_sb_cfg');
+  const cfg = (!storedCfg || isOldKey) ? defaultCfg : storedCfg;
+  if(!storedCfg || isOldKey) localStorage.setItem('hm_sb_cfg',JSON.stringify(defaultCfg));
   // Bloquer le bouton login pendant le chargement Supabase
   setTimeout(()=>{ _setLoginReady(false,'Connexion Supabase...'); }, 50);
   let _authStarted = false;
