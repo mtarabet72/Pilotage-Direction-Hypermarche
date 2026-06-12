@@ -10,8 +10,8 @@ const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192-marjane.png',
-  './icons/icon-512-marjane.png'
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 // Domaines qui ne doivent JAMAIS être mis en cache
