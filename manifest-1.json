@@ -1,7 +1,7 @@
 {
   "name": "Pilotage Hypermarché — Direction",
   "short_name": "TARABET",
-  "description": "Système de gestion et suivi des tâches opérationnelles — Marjane Tanger Médina",
+  "description": "Système de gestion et suivi des tâches opérationnelles — Hypermarché",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait-primary",
