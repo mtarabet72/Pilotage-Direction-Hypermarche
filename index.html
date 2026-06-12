@@ -682,6 +682,18 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <div id="custom-roles-list"></div>
   </div>
 
+  <!-- Gestion des Rayons Commerciaux -->
+  <div class="settings-card" id="rayons-mgmt-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0;">🏪 Gestion des Rayons Commerciaux</h3>
+      <button class="btn-primary" onclick="openRayonModal()" style="font-size:12px;padding:7px 16px;">➕ Ajouter un rayon</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
+      Créez et gérez les rayons commerciaux. Ils apparaîtront dans <strong>Suivi Tâches → Par Rayon</strong>.
+    </div>
+    <div id="rayons-mgmt-list"></div>
+  </div>
+
   <!-- Gestion des utilisateurs (Directeur seulement) -->
   <div class="settings-card" id="users-mgmt-card">
     <h3>🔐 Gestion des Utilisateurs</h3>
@@ -849,15 +861,10 @@ const ROLES=[
    taches:[]},
 ];
 
-const CONFIG_RAYONS={
-  "PARAPHARMACIE":{nom:"Parapharmacie",numero:10,departement:"PGC",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"PAR-Q1",freq:"Q",label:"Réassort et facing linéaire",responsable:"employes"},{id:"PAR-Q2",freq:"Q",label:"Contrôle prix et promotions",responsable:"superviseur"},{id:"PAR-H1",freq:"H",label:"Analyse ventes par marque",responsable:"chef"}]},
-  "BOULANGERIE":{nom:"Boulangerie",numero:87,departement:"PRODUITS FRAIS",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"BUL-Q1",freq:"Q",label:"Cuissons et mise en rayon",responsable:"employes"},{id:"BUL-Q2",freq:"Q",label:"Contrôle qualité pains",responsable:"superviseur"},{id:"BUL-Q3",freq:"Q",label:"Gestion invendus",responsable:"chef"},{id:"BUL-H1",freq:"H",label:"Analyse ventes par famille",responsable:"chef"}]},
-  "BOUCHERIE":{nom:"Boucherie",numero:85,departement:"PRODUITS FRAIS",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"BCH-Q1",freq:"Q",label:"Découpe et préparation viandes",responsable:"employes",note:"HACCP"},{id:"BCH-Q2",freq:"Q",label:"Parage et mise en vitrine",responsable:"employes"},{id:"BCH-Q3",freq:"Q",label:"Étiquetage poids/prix",responsable:"superviseur"},{id:"BCH-H1",freq:"H",label:"Inventaire tournant viandes",responsable:"chef"}]},
-  "CHARCUTERIE":{nom:"Charcuterie",numero:80,departement:"PRODUITS FRAIS",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"CHR-Q1",freq:"Q",label:"Réception et contrôle charcuterie",responsable:"chef"},{id:"CHR-Q2",freq:"Q",label:"Mise en rayon tranchés emballés",responsable:"employes"},{id:"CHR-Q3",freq:"Q",label:"Gestion démarque du jour",responsable:"superviseur"},{id:"CHR-H1",freq:"H",label:"Bilan pertes et rendements",responsable:"chef"}]},
-  "FRUITS ET LEGUM":{nom:"Fruits et Légumes",numero:91,departement:"PRODUITS FRAIS",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"FL-Q1",freq:"Q",label:"Tri et rotation produits frais",responsable:"employes"},{id:"FL-Q2",freq:"Q",label:"Mise en valeur produits de saison",responsable:"superviseur"},{id:"FL-H1",freq:"H",label:"Contrôle qualité fournisseurs",responsable:"chef"}]},
-  "MENAGE":{nom:"Ménage",numero:40,departement:"BAZAR",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"MEN-Q1",freq:"Q",label:"Réassort articles ménage",responsable:"employes"},{id:"MEN-Q2",freq:"Q",label:"Contrôle prix",responsable:"superviseur"},{id:"MEN-H1",freq:"H",label:"Point ventes CA",responsable:"chef"}]},
-  "ENFANT":{nom:"Enfant",numero:34,departement:"TEXTILE",secteur:"Commercial",equipe:{chef:"À affecter",superviseur:"À affecter",employes:[]},taches:[{id:"ENF-Q1",freq:"Q",label:"Mise en rayon et facing",responsable:"employes"},{id:"ENF-Q2",freq:"Q",label:"Contrôle antivols",responsable:"superviseur"},{id:"ENF-H1",freq:"H",label:"Analyse ventes par âge",responsable:"chef"}]},
-};
+let customRayons={};  // géré par l'admin, sauvegardé Supabase/localStorage
+// CONFIG_RAYONS est maintenant un alias dynamique vers customRayons
+Object.defineProperty(window,'CONFIG_RAYONS',{get:()=>customRayons,set:(v)=>{customRayons=v;}});
+
 
 // ══════════════════════════════════════════════════════════════
 // CONSTANTES & ÉTAT
@@ -901,6 +908,7 @@ function loadData(){
   try{customRoles=JSON.parse(localStorage.getItem("hm_custom_roles")||"[]");}catch(e){customRoles=[];}
   try{companyData=Object.assign({nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""},JSON.parse(localStorage.getItem("hm_company")||"{}"));}catch(e){}
   try{usersData=JSON.parse(localStorage.getItem("hm_users")||"[]");}catch(e){usersData=[];}
+  try{customRayons=JSON.parse(localStorage.getItem("hm_rayons")||"{}")||{};}catch(e){customRayons={};}  // rayons admin
   // Toujours garantir le compte admin même si localStorage est bloqué
   const existingAdmin = usersData.find(u=>u.username==='admin');
   if(!existingAdmin){
@@ -945,6 +953,12 @@ function saveCompanyData(){
   try{localStorage.setItem("hm_company", JSON.stringify(companyData));}catch(e){}
   if(_sbClient && _fbConnected){
     _sb.set('hm_app_data','hm_company', companyData).catch(()=>{});
+  }
+}
+function saveRayons(){
+  try{localStorage.setItem("hm_rayons", JSON.stringify(customRayons));}catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_rayons', customRayons).catch(()=>{});
   }
 }
 function saveCustomRoles(){
@@ -1164,8 +1178,9 @@ function onLoginSuccess(){
         _sb.get('hm_app_data','hm_events'),
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
-        _sb.get('hm_app_data','hm_custom_roles')
-      ]).then(([sbUsers,rows,evts,ct,ov,cr])=>{
+        _sb.get('hm_app_data','hm_custom_roles'),
+        _sb.get('hm_app_data','hm_rayons')
+      ]).then(([sbUsers,rows,evts,ct,ov,cr,sbRayons])=>{
         // Users : source de vérité Supabase
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
           const localById={};
@@ -1198,6 +1213,11 @@ function onLoginSuccess(){
           customRoles=cr;
           localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
         }
+        if(sbRayons && typeof sbRayons==='object' && !Array.isArray(sbRayons)){
+          customRayons=sbRayons;
+          localStorage.setItem('hm_rayons',JSON.stringify(customRayons));
+        }
+        renderRayonsList(); renderSelectRayon();
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     } else {
@@ -1236,6 +1256,7 @@ function onLoginSuccess(){
           customRoles=cr;
           localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
         }
+        renderSelectRayon();
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     }
@@ -1328,7 +1349,7 @@ function showView(v){
   if(v==="tasks"){if(viewMode==='rayon'&&rayonActif){renderSidebar();afficherRayon(rayonActif);}else{renderSidebar();renderTaskView();}}
   if(v==="results")renderResults();
   if(v==="export")renderExportScope();
-  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();}
+  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1781,16 +1802,25 @@ function setViewMode(mode){
   document.getElementById('view-mode-rayon').style.borderColor=mode==='rayon'?'var(--accent)':'#ccc';
   document.getElementById('rayon-selector').style.display=mode==='rayon'?'block':'none';
   if(mode==='rayon'){
-    peuplerSelectRayon();
+    renderSelectRayon();
+    const keys=Object.keys(customRayons);
+    if(!keys.length){
+      document.getElementById('role-header').innerHTML=`<div style="padding:28px 20px;text-align:center;color:var(--muted);">
+        <div style="font-size:32px;margin-bottom:10px;">🏪</div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px;">Aucun rayon créé</div>
+        <div style="font-size:12px;">Allez dans <strong>⚙️ Paramètres → Gestion des Rayons</strong><br>pour créer vos rayons commerciaux.</div>
+      </div>`;
+      document.getElementById('task-list').innerHTML='';
+      document.getElementById('pb-count').textContent='0/0 (0%)';
+      document.getElementById('progress-bar').style.width='0%';
+      return;
+    }
     const last=localStorage.getItem('hm_rayon_actif');
-    if(last&&CONFIG_RAYONS[last]){document.getElementById('selectRayon').value=last;afficherRayon(last);}
-    else{document.getElementById('role-header').innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);">Sélectionnez un rayon.</div>`;document.getElementById('task-list').innerHTML='';document.getElementById('pb-count').textContent='0/0 (0%)';document.getElementById('progress-bar').style.width='0%';}
+    if(last&&customRayons[last]){document.getElementById('selectRayon').value=last;afficherRayon(last);}
+    else{document.getElementById('role-header').innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);">Sélectionnez un rayon ci-dessus.</div>`;document.getElementById('task-list').innerHTML='';document.getElementById('pb-count').textContent='0/0 (0%)';document.getElementById('progress-bar').style.width='0%';}
   } else{renderSidebar();renderTaskView();}
 }
-function peuplerSelectRayon(){
-  const sel=document.getElementById('selectRayon');sel.innerHTML='<option value="">-- Choisir un rayon --</option>';
-  Object.keys(CONFIG_RAYONS).forEach(k=>{const opt=document.createElement('option');opt.value=k;opt.textContent=`${CONFIG_RAYONS[k].departement} — N°${CONFIG_RAYONS[k].numero} : ${CONFIG_RAYONS[k].nom}`;sel.appendChild(opt);});
-}
+function peuplerSelectRayon(){ renderSelectRayon(); }
 function changerRayon(){const k=document.getElementById('selectRayon').value;if(k){localStorage.setItem('hm_rayon_actif',k);afficherRayon(k);}}
 function getResponsableNom(rayon,type){if(type==='chef')return rayon.equipe.chef;if(type==='superviseur')return rayon.equipe.superviseur;return 'Équipe employés';}
 function afficherRayon(key){
@@ -1831,6 +1861,214 @@ function renderProgressBarRayon(rayon){
   document.getElementById('progress-bar').style.width=pct+'%';
   document.getElementById('progress-bar').style.background='#2980b9';
 }
+// ══════════════════════════════════════════════════════════════
+// GESTION DES RAYONS (CRUD Admin)
+// ══════════════════════════════════════════════════════════════
+
+function renderSelectRayon(){
+  const sel=document.getElementById('selectRayon');
+  if(!sel) return;
+  sel.innerHTML='<option value="">-- Choisir un rayon --</option>';
+  const keys=Object.keys(customRayons).sort((a,b)=>{
+    const na=(customRayons[a].numero||999), nb=(customRayons[b].numero||999);
+    return na-nb;
+  });
+  keys.forEach(k=>{
+    const r=customRayons[k];
+    const opt=document.createElement('option');
+    opt.value=k;
+    opt.textContent=`${r.departement||''} — N°${r.numero||'?'} : ${r.nom}`;
+    sel.appendChild(opt);
+  });
+  if(!keys.length){
+    const opt=document.createElement('option');
+    opt.disabled=true;
+    opt.textContent='Aucun rayon — créez-en dans Paramètres';
+    sel.appendChild(opt);
+  }
+}
+
+function renderRayonsList(){
+  const el=document.getElementById('rayons-mgmt-list');
+  if(!el) return;
+  const keys=Object.keys(customRayons).sort((a,b)=>(customRayons[a].numero||999)-(customRayons[b].numero||999));
+  if(!keys.length){
+    el.innerHTML=`<div style="text-align:center;padding:32px 20px;color:var(--muted);font-size:13px;background:#f8fafc;border-radius:10px;border:2px dashed var(--border);">
+      <div style="font-size:36px;margin-bottom:10px;">🏪</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Aucun rayon créé</div>
+      <div style="font-size:12px;">Cliquez sur <strong>"➕ Ajouter un rayon"</strong> pour commencer.</div>
+    </div>`;
+    return;
+  }
+  // Grouper par département
+  const byDept={};
+  keys.forEach(k=>{
+    const dept=customRayons[k].departement||'AUTRE';
+    if(!byDept[dept]) byDept[dept]=[];
+    byDept[dept].push(k);
+  });
+  const deptColors={'PGC':'#2980b9','PRODUITS FRAIS':'#27ae60','BAZAR':'#8e44ad','TEXTILE':'#e67e22','SERVICES':'#16a085','ELECTROMENAGER':'#2c3e50','AUTRE':'#7f8c8d'};
+  el.innerHTML=Object.keys(byDept).sort().map(dept=>{
+    const color=deptColors[dept]||'#7f8c8d';
+    const rows=byDept[dept].map(k=>{
+      const r=customRayons[k];
+      const nbT=(r.taches||[]).length;
+      const chef=(r.equipe&&r.equipe.chef)||'';
+      const sup=(r.equipe&&r.equipe.superviseur)||'';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:7px;flex-wrap:wrap;">
+        <div style="width:32px;height:32px;border-radius:8px;background:${color}18;color:${color};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🏪</div>
+        <div style="flex:1;min-width:120px;">
+          <div style="font-weight:700;font-size:13px;color:var(--text);">${r.nom}
+            <span style="font-weight:400;font-size:11px;color:var(--muted);margin-left:4px;">N°${r.numero||'?'}</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;">
+            ${chef?`<span style="font-size:11px;color:#2980b9;">👤 ${chef}</span>`:''}
+            ${sup?`<span style="font-size:11px;color:#8e44ad;">👁️ ${sup}</span>`:''}
+            <span style="font-size:11px;color:var(--muted);">📋 ${nbT} tâche${nbT!==1?'s':''}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button onclick="openRayonModal('${k}')" style="padding:5px 12px;font-size:11px;border:1px solid #2980b9;color:#2980b9;background:#eaf4fb;border-radius:6px;cursor:pointer;font-weight:600;">✏️</button>
+          <button onclick="deleteRayon('${k}')" style="padding:5px 12px;font-size:11px;border:1px solid #e74c3c;color:#e74c3c;background:#fdf2f2;border-radius:6px;cursor:pointer;font-weight:600;">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:${color};padding:0 4px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+        <span style="flex:1;">${dept}</span>
+        <span style="font-weight:400;color:var(--muted);">${byDept[dept].length} rayon${byDept[dept].length>1?'s':''}</span>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function openRayonModal(key){
+  const isEdit=!!key;
+  const r=isEdit?customRayons[key]:{nom:'',numero:'',departement:'PGC',secteur:'Commercial',equipe:{chef:'',superviseur:'',employes:[]},taches:[]};
+  _mrTaches=JSON.parse(JSON.stringify((r&&r.taches)||[]));
+  const depts=['PGC','PRODUITS FRAIS','BAZAR','TEXTILE','SERVICES','ELECTROMENAGER','AUTRE'];
+  document.getElementById('modal-title').textContent=isEdit?`✏️ Modifier — ${r.nom}`:'➕ Nouveau rayon';
+  document.getElementById('modal-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="modal-field" style="grid-column:1/-1"><label>Nom du rayon *</label>
+        <input type="text" id="mr-nom" value="${r.nom||''}" placeholder="ex: Épicerie Salée" style="width:100%;box-sizing:border-box;"></div>
+      <div class="modal-field"><label>Numéro de rayon</label>
+        <input type="number" id="mr-num" value="${r.numero||''}" placeholder="ex: 12" min="1" max="999" style="width:100%;box-sizing:border-box;"></div>
+      <div class="modal-field"><label>Département</label>
+        <select id="mr-dept" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">${depts.map(d=>`<option value="${d}"${(r.departement||'PGC')===d?' selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="modal-field"><label>Chef de rayon</label>
+        <input type="text" id="mr-chef" value="${(r.equipe&&r.equipe.chef)||''}" placeholder="Prénom NOM" style="width:100%;box-sizing:border-box;"></div>
+      <div class="modal-field"><label>Superviseur</label>
+        <input type="text" id="mr-sup" value="${(r.equipe&&r.equipe.superviseur)||''}" placeholder="Prénom NOM" style="width:100%;box-sizing:border-box;"></div>
+    </div>
+    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">📋 Tâches du rayon</span>
+      <button onclick="_addRayonTache()" style="padding:5px 12px;font-size:11px;border:1px solid #2980b9;color:#2980b9;background:#eaf4fb;border-radius:6px;cursor:pointer;font-weight:600;">+ Ajouter tâche</button>
+    </div>
+    <div id="mr-taches-list">${_renderRayonTachesEditor(_mrTaches)}</div>
+  `;
+  document.getElementById('modal-save-btn').textContent=isEdit?'💾 Enregistrer':'✅ Créer le rayon';
+  modalSaveCallback=()=>_saveRayon(key);
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('mr-nom')?.focus(),100);
+}
+
+function _renderRayonTachesEditor(taches){
+  if(!taches.length) return `<div style="color:var(--muted);font-size:11px;text-align:center;padding:16px;background:#f8fafc;border-radius:8px;border:1px dashed var(--border);">
+    Aucune tâche — cliquez sur "+ Ajouter tâche"</div>`;
+  const freqColors={Q:'#e74c3c',H:'#f39c12',M:'#27ae60'};
+  return taches.map((t,i)=>`
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);min-width:20px;text-align:center;">${i+1}</span>
+        <input type="text" value="${(t.label||'').replace(/"/g,'&quot;')}" placeholder="Libellé de la tâche *"
+          data-ti="${i}" data-field="label" oninput="_updateTacheField(this)"
+          style="flex:1;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;outline:none;">
+        <button onclick="_deleteRayonTache(${i})" title="Supprimer"
+          style="padding:5px 9px;font-size:13px;border:1px solid #e74c3c;color:#e74c3c;background:#fdf2f2;border-radius:6px;cursor:pointer;flex-shrink:0;">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;padding-left:26px;">
+        <select data-ti="${i}" data-field="freq" onchange="_updateTacheField(this)"
+          style="padding:5px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;color:${freqColors[t.freq||'Q']};font-weight:600;flex:1;">
+          <option value="Q"${(t.freq||'Q')==='Q'?' selected':''}>📅 Quotidien</option>
+          <option value="H"${t.freq==='H'?' selected':''}>📆 Hebdomadaire</option>
+          <option value="M"${t.freq==='M'?' selected':''}>🗓️ Mensuel</option>
+        </select>
+        <select data-ti="${i}" data-field="responsable" onchange="_updateTacheField(this)"
+          style="padding:5px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;flex:1;">
+          <option value="employes"${(t.responsable||'employes')==='employes'?' selected':''}>👥 Employés</option>
+          <option value="superviseur"${t.responsable==='superviseur'?' selected':''}>👁️ Superviseur</option>
+          <option value="chef"${t.responsable==='chef'?' selected':''}>👤 Chef de rayon</option>
+        </select>
+      </div>
+    </div>`).join('');
+}
+
+let _mrTaches=[];
+function _addRayonTache(){
+  _mrTaches.push({id:'RT-'+Date.now(),label:'',freq:'Q',responsable:'employes'});
+  document.getElementById('mr-taches-list').innerHTML=_renderRayonTachesEditor(_mrTaches);
+}
+function _deleteRayonTache(i){
+  _mrTaches.splice(i,1);
+  document.getElementById('mr-taches-list').innerHTML=_renderRayonTachesEditor(_mrTaches);
+}
+function _updateTacheField(el){
+  const i=parseInt(el.dataset.ti);
+  const field=el.dataset.field;
+  if(_mrTaches[i]) _mrTaches[i][field]=el.value;
+}
+
+function _saveRayon(existingKey){
+  const nom=document.getElementById('mr-nom').value.trim();
+  if(!nom){alert('Le nom du rayon est requis.');return;}
+  const numero=parseInt(document.getElementById('mr-num').value)||0;
+  const dept=document.getElementById('mr-dept').value;
+  const secteur=document.getElementById('mr-secteur').value.trim()||'Commercial';
+  const chef=document.getElementById('mr-chef').value.trim()||'À affecter';
+  const sup=document.getElementById('mr-sup').value.trim()||'À affecter';
+  // Collecter les tâches depuis le DOM
+  const tachesDom=[];
+  document.querySelectorAll('#mr-taches-list [data-field="label"]').forEach((el,i)=>{
+    const label=el.value.trim();
+    if(!label) return;
+    const freqEl=document.querySelector(`#mr-taches-list [data-ti="${i}"][data-field="freq"]`);
+    const respEl=document.querySelector(`#mr-taches-list [data-ti="${i}"][data-field="responsable"]`);
+    const tid=(_mrTaches[i]&&_mrTaches[i].id)||('RT-'+Date.now()+'-'+i);
+    tachesDom.push({id:tid,label,freq:freqEl?freqEl.value:'Q',responsable:respEl?respEl.value:'employes'});
+  });
+  const key=existingKey||(nom.toUpperCase().replace(/[^A-Z0-9]/g,'_').slice(0,20)+'_'+Date.now());
+  const existing=customRayons[key]||{};
+  customRayons[key]={
+    nom,numero,departement:dept,secteur,
+    equipe:{chef,superviseur:sup,employes:(existing.equipe&&existing.equipe.employes)||[]},
+    taches:tachesDom
+  };
+  saveRayons();
+  renderRayonsList();
+  renderSelectRayon();
+  closeModal();
+  showToast(existingKey?'✅ Rayon modifié':'✅ Rayon créé','#27ae60');
+}
+
+function deleteRayon(key){
+  const r=customRayons[key];
+  if(!r) return;
+  if(!confirm(`Supprimer le rayon "${r.nom}" ?
+
+Toutes ses tâches seront perdues.`)) return;
+  delete customRayons[key];
+  if(rayonActif===key){rayonActif=null;localStorage.removeItem('hm_rayon_actif');}
+  saveRayons();
+  renderRayonsList();
+  renderSelectRayon();
+  showToast('🗑️ Rayon supprimé','#e74c3c');
+}
+
+// openRayonModal est défini plus haut (version unifiée)
+
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('open');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('open');}
 
@@ -2637,6 +2875,14 @@ async function initSupabase(cfg){
           updateHeaderCompany();
         }
       }
+      else if(key==='hm_rayons'){
+        if(fresh && typeof fresh==='object' && !Array.isArray(fresh)){
+          customRayons=fresh;
+          localStorage.setItem('hm_rayons',JSON.stringify(fresh));
+          renderSelectRayon();
+          if(isDirecteur()) renderRayonsList();
+        }
+      }
     });
 
     // ── Démarrer le polling de secours (fallback si Realtime défaillant) ──
@@ -2891,6 +3137,18 @@ function startSupabasePoll(){
           localStorage.setItem('hm_custom_roles', JSON.stringify(cr));
           renderDashboard(); renderSidebar();
           if(isDirecteur()) renderCustomRolesList();
+        }
+      }
+      // Polling rayons
+      const sbRayons = await _sb.get('hm_app_data','hm_rayons').catch(()=>null);
+      if(sbRayons && typeof sbRayons==='object' && !Array.isArray(sbRayons)){
+        const newHash = JSON.stringify(Object.keys(sbRayons).sort());
+        if(newHash !== (window._sbPollRayons||'')){
+          window._sbPollRayons = newHash;
+          customRayons = sbRayons;
+          localStorage.setItem('hm_rayons', JSON.stringify(sbRayons));
+          renderSelectRayon();
+          if(isDirecteur()) renderRayonsList();
         }
       }
     }catch(e){}
