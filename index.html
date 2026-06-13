@@ -2672,7 +2672,11 @@ function testFirebaseConnection(){
 // ── Initialisation Supabase ────────────────────────────────────
 async function initSupabase(cfg){
   try{
-    _sbClient = supabase.createClient(cfg.projectUrl, cfg.anonKey);
+    _sbClient = supabase.createClient(cfg.projectUrl, cfg.anonKey, {
+      global: {
+        headers: { 'x-app-secret': APP_SECRET }
+      }
+    });
     // Test connexion
     const {error:testErr} = await _sbClient.from('hm_app_data').select('key').limit(1);
     if(testErr) throw testErr;
@@ -2916,6 +2920,9 @@ function _setLoginReady(ready, msg){
 }
 
 function initFirebaseOnStartup(){
+  // ── Secret partagé pour RLS policies ──
+  const APP_SECRET = 'Mjn_Tanger08_Med!na#2025'; // doit correspondre au SQL Supabase
+
   const defaultCfg={
     projectUrl:'https://kipfcdhraasuuksypfyu.supabase.co',
     anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcGZjZGhyYWFzdXVrc3lwZnl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDQ4MzcsImV4cCI6MjA5NjY4MDgzN30.afT15ecV0ZUMWYwNwdlGLqE6xpfKSePNQ6xUUvL68bo'
