@@ -2688,71 +2688,58 @@ async function initSupabase(cfg){
     showToast('⚡ Supabase connecté !','#3ecf8e');
 
     // ── Chargement et fusion users (local + Supabase) ──
-    const usersRow = await _sb.get('hm_app_data','hm_users');
-    if(usersRow && Array.isArray(usersRow) && usersRow.length>0){
-      // Fusion intelligente : union des deux listes, local prioritaire pour les hashs modifiés
-      const localById={};
-      usersData.forEach(u=>{ localById[u.id]=u; });
-      const remoteById={};
-      usersRow.forEach(u=>{ remoteById[u.id]=u; });
-      // Tous les IDs des deux sources
-      const allIds=new Set([...Object.keys(localById),...Object.keys(remoteById)]);
-      const merged=[];
-      allIds.forEach(id=>{
-        const local=localById[id];
-        const remote=remoteById[id];
-        if(local && remote){
-          // Les deux existent : prendre remote mais préserver hash local si _pwChanged
-          const final={...remote};
-          if(local._pwChanged) final.passwordHash=local.passwordHash, final._pwChanged=true;
-          merged.push(final);
-        } else if(local){
-          merged.push(local); // seulement en local → à pousser vers Supabase
-        } else {
-          merged.push(remote); // seulement sur Supabase → récupérer
-        }
-      });
-      usersData=merged;
-      localStorage.setItem('hm_users',JSON.stringify(usersData));
-      // Pousser la liste fusionnée vers Supabase pour synchroniser
-      await _sb.set('hm_app_data','hm_users',usersData);
-      renderUsersList();
-    } else if(usersData.length>0){
-      // Supabase vide → pousser les users locaux
-      await _sb.set('hm_app_data','hm_users',usersData);
-    }
+    try{
+      const usersRow = await _sb.get('hm_app_data','hm_users');
+      if(usersRow && Array.isArray(usersRow) && usersRow.length>0){
+        const localById={};
+        usersData.forEach(u=>{ localById[u.id]=u; });
+        const remoteById={};
+        usersRow.forEach(u=>{ remoteById[u.id]=u; });
+        const allIds=new Set([...Object.keys(localById),...Object.keys(remoteById)]);
+        const merged=[];
+        allIds.forEach(id=>{
+          const local=localById[id];
+          const remote=remoteById[id];
+          if(local && remote){
+            const final={...remote};
+            if(local._pwChanged){ final.passwordHash=local.passwordHash; final._pwChanged=true; }
+            merged.push(final);
+          } else if(local){ merged.push(local);
+          } else { merged.push(remote); }
+        });
+        usersData=merged;
+        localStorage.setItem('hm_users',JSON.stringify(usersData));
+        // Pousser la liste fusionnée vers Supabase (non-bloquant)
+        _sb.set('hm_app_data','hm_users',usersData).catch(()=>{});
+        renderUsersList();
+      } else if(usersData.length>0){
+        // Supabase vide → pousser les users locaux (non-bloquant)
+        _sb.set('hm_app_data','hm_users',usersData).catch(()=>{});
+      }
+      // Vider la file d'attente si des saveUsers ont eu lieu avant la connexion
+      if(window._usersSyncPending){
+        _sb.set('hm_app_data','hm_users',usersData).catch(()=>{});
+        window._usersSyncPending=false;
+      }
+    }catch(usersErr){ console.warn('users load error:',usersErr); }
     _fbUsersLoaded=true;
-    // Vider la file d'attente si des saveUsers ont eu lieu avant la connexion
-    if(window._usersSyncPending){
-      _sb.set('hm_app_data','hm_users',usersData);
-      window._usersSyncPending=false;
-    }
-    // ✅ Débloquer le bouton Connexion — users chargés depuis Supabase
+    // ✅ Débloquer le bouton Connexion — toujours atteint même si users échoue
     _setLoginReady(true);
 
-    // ── customRoles ──
-    const cr = await _sb.get('hm_app_data','hm_custom_roles');
-    if(cr && Array.isArray(cr) && cr.length>0){
-      customRoles=cr;
-      localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
-      renderCustomRolesList();
-    }
-
-    // ── customTasks ──
-    const ct = await _sb.get('hm_app_data','hm_custom_tasks');
-    if(ct && typeof ct==='object'){ customTasks=ct; localStorage.setItem('hm_cust',JSON.stringify(customTasks)); }
-
-    // ── taskOverrides ──
-    const ov = await _sb.get('hm_app_data','hm_task_overrides');
-    if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(taskOverrides)); }
-
-    // ── companyData ──
-    const cd = await _sb.get('hm_app_data','hm_company');
-    if(cd && typeof cd==='object'){
-      Object.assign(companyData, cd);
-      localStorage.setItem('hm_company',JSON.stringify(companyData));
-      updateHeaderCompany();
-    }
+    // ── Chargement données app (non-bloquant, en parallèle) ──
+    Promise.all([
+      _sb.get('hm_app_data','hm_custom_roles').catch(()=>null),
+      _sb.get('hm_app_data','hm_custom_tasks').catch(()=>null),
+      _sb.get('hm_app_data','hm_task_overrides').catch(()=>null),
+      _sb.get('hm_app_data','hm_company').catch(()=>null),
+      _sb.get('hm_app_data','hm_rayons').catch(()=>null),
+    ]).then(([cr,ct,ov,cd,ry])=>{
+      if(cr && Array.isArray(cr) && cr.length>0){ customRoles=cr; localStorage.setItem('hm_custom_roles',JSON.stringify(cr)); renderCustomRolesList(); }
+      if(ct && typeof ct==='object'){ customTasks=ct; localStorage.setItem('hm_cust',JSON.stringify(ct)); }
+      if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(ov)); }
+      if(cd && typeof cd==='object'){ Object.assign(companyData,cd); localStorage.setItem('hm_company',JSON.stringify(companyData)); updateHeaderCompany(); }
+      if(ry && typeof ry==='object' && Object.keys(ry).length>0){ customRayons=ry; localStorage.setItem('hm_rayons',JSON.stringify(ry)); renderRayonsList(); renderSelectRayon(); }
+    }).catch(()=>{});
 
     // ── Completions : admin fusionne tout, user charge les siennes ──
     if(isDirecteur()){
