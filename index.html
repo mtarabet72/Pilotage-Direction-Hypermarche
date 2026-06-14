@@ -1023,7 +1023,7 @@ function openAddDeptModal(editId){
   document.getElementById('modal-actions').innerHTML = `
     <button class="modal-cancel" onclick="closeModal()">Annuler</button>
     <button class="modal-save" onclick="saveDept()">💾 Enregistrer</button>`;
-  document.getElementById('modal-overlay').style.display='flex';
+  document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('modal-box').onclick = e=>e.stopPropagation();
 }
 
@@ -1290,7 +1290,7 @@ function canEditRole(roleId){
 function isOwnRole(roleId){return currentUser?.ownRoleId===roleId;}
 function getAccessibleRoles(){
   if(!currentUser)return[];
-  if(isDirecteur())return ROLES;
+  if(isDirecteur())return getAllRoles();
   const ids=new Set([...(currentUser.evaluableRoleIds||[])]);
   if(currentUser.ownRoleId)ids.add(currentUser.ownRoleId);
   return getAllRoles().filter(r=>ids.has(r.id));
@@ -2517,7 +2517,7 @@ function removeLogo(){
 function renderTaskMgmtRoleSelect(){
   const sel=document.getElementById('task-mgmt-role');if(!sel)return;
   sel.innerHTML='<option value="">-- Choisir une fonction --</option>';
-  const accessible=isDirecteur()?ROLES:getAccessibleRoles();
+  const accessible=isDirecteur()?getAllRoles():getAccessibleRoles();
   accessible.forEach(r=>{const opt=document.createElement('option');opt.value=r.id;opt.textContent=r.icon+' '+r.label;sel.appendChild(opt);});
 }
 function renderTaskMgmt(){
