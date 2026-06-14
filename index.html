@@ -1176,12 +1176,13 @@ function onLoginSuccess(){
       Promise.all([
         _sb.get('hm_app_data','hm_users'),
         _sb.getAll('hm_completions'),
-        _sb.get('hm_app_data','hm_events'),
+        _sbClient.from('hm_events').select('id,data'), // lecture directe table hm_events
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
         _sb.get('hm_app_data','hm_custom_roles'),
         _sb.get('hm_app_data','hm_rayons')
-      ]).then(([sbUsers,rows,evts,ct,ov,cr,sbRayons])=>{
+      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons])=>{
+        const evts={}; (evtsResult.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
         // Users : source de vérité Supabase
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
           const localById={};
@@ -1447,7 +1448,7 @@ function renderDashboard(){
   const isAdmin = isDirecteur();
   // ── Rôles visibles selon profil ──
   const visibleRoles = isAdmin
-    ? ROLES
+    ? getAllRoles()
     : getAllRoles().filter(r =>
         (currentUser.evaluableRoleIds||[]).includes(r.id) ||
         currentUser.ownRoleId === r.id
@@ -1948,7 +1949,8 @@ function openRayonModal(key){
   const isEdit=!!key;
   const r=isEdit?customRayons[key]:{nom:'',numero:'',departement:'PGC',secteur:'Commercial',equipe:{chef:'',superviseur:'',employes:[]},taches:[]};
   _mrTaches=JSON.parse(JSON.stringify((r&&r.taches)||[]));
-  const depts=['PGC','PRODUITS FRAIS','BAZAR','TEXTILE','SERVICES','ELECTROMENAGER','AUTRE'];
+  const depts=['PGC','PRODUITS FRAIS','BAZAR','TEXTILE','SERVICES','ELECTROMENAGER','AUTRE',
+    ...(customRoles||[]).map(r=>r.label).filter(l=>!['PGC','PRODUITS FRAIS','BAZAR','TEXTILE','SERVICES','ELECTROMENAGER','AUTRE'].includes(l))];
   document.getElementById('modal-title').textContent=isEdit?`✏️ Modifier — ${r.nom}`:'➕ Nouveau rayon';
   document.getElementById('modal-body').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -2777,7 +2779,7 @@ async function initSupabase(cfg){
           localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
         }
         if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
-        if(_livePanel){ const evts=await _sb.get('hm_app_data','hm_events').catch(()=>null)||{}; renderLivePanelFromEvents(evts); }
+        if(_livePanel){ const r5=await _sbClient.from('hm_events').select('id,data').catch(()=>({data:[]})); const evts5={}; (r5.data||[]).forEach(r=>{ if(r.data) evts5[r.id]=r.data; }); _eventsCache=evts5; renderLivePanelFromEvents(evts5); }
       } else if(currentUser && changedUserId===currentUser.id){
         // User : sa propre ligne a été modifiée (reset par admin)
         const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
@@ -2790,13 +2792,16 @@ async function initSupabase(cfg){
       }
     });
 
-    // hm_events : toast + live panel admin
+    // hm_events : toast + live panel admin (lecture directe depuis la table hm_events)
     _sb.on('hm_events', async ()=>{
       if(!isDirecteur()) return;
-      const evts = await _sb.get('hm_app_data','hm_events') || {};
+      // Lire directement depuis hm_events table (pas hm_app_data) => pas de race condition
+      const rows = await _sbClient.from('hm_events').select('id,data').catch(()=>({data:[]}));
+      const evts = {};
+      (rows.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
       _eventsCache = evts;
       if(_livePanel){ renderLivePanelFromEvents(evts); }
-      if(currentUser) renderDashboard();
+      renderTasks(); renderProgressBar(); renderDashboard();
       if(!_livePanel){
         const today=new Date().toISOString().slice(0,10);
         const recent=Object.values(evts)
@@ -2804,7 +2809,7 @@ async function initSupabase(cfg){
           .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
         if(recent){
           const age=(Date.now()-new Date(recent.completedAt).getTime())/1000;
-          if(age<8) showToast('✅ '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
+          if(age<8) showToast('\u2705 '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
         }
       }
     });
@@ -2963,18 +2968,18 @@ function pushTaskEventToAdmin(tid, freq, isDone, task, role, now){
     completedAt:now.toISOString(),
     period:periodKey(freq)
   };
-  // Supabase : écrire l'événement dans hm_events
+  // Supabase : écrire l'événement directement dans hm_events (upsert ou delete)
   if(_sbClient&&_fbConnected){
     const eventKey=uid+'__'+role.id+'__'+tid+'__'+periodKey(freq);
-    // Upsert ligne pour le realtime listener
-    _sbClient.from('hm_events').upsert({id:eventKey, data:event})
-      .then(({error})=>{ if(error) console.warn('events upsert:',error.message); });
-    // Mettre à jour le dict global (pour le dashboard admin)
-    _sb.get('hm_app_data','hm_events').then(existing=>{
-      const all=(existing&&typeof existing==='object')?existing:{};
-      if(isDone){all[eventKey]=event;}else{delete all[eventKey];}
-      _sb.set('hm_app_data','hm_events',all);
-    });
+    if(isDone){
+      // Upsert => declenche Realtime chez l'admin immediatement
+      _sbClient.from('hm_events').upsert({id:eventKey, data:event})
+        .then(({error})=>{ if(error) console.warn('events upsert:',error.message); });
+    } else {
+      // Decochage => supprimer la ligne
+      _sbClient.from('hm_events').delete().eq('id', eventKey)
+        .then(({error})=>{ if(error) console.warn('events delete:',error.message); });
+    }
   }
   // Fallback localStorage
   try{
@@ -3036,10 +3041,13 @@ function openLivePanel(){
   if(_sbClient&&_fbConnected){
     Promise.all([
       _sb.getAll('hm_completions'),
-      _sb.get('hm_app_data','hm_events')
-    ]).then(([rows,evts])=>{
+      _sbClient.from('hm_events').select('id,data')  // lecture directe table hm_events
+    ]).then(([rows, evtsResult])=>{
       if(rows && rows.length>0){ let merged={}; rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);}); completions=merged; }
-      renderLivePanelFromEvents(evts||{});
+      const evts={};
+      (evtsResult.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
+      _eventsCache=evts;
+      renderLivePanelFromEvents(evts);
     }).catch(()=>{ renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}')); });
   } else {
     renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}'));
@@ -3261,8 +3269,9 @@ function renderLivePanel(snap,updatedAt,byUser){
   }
   // Lire les événements depuis Supabase ou localStorage et afficher
   if(_sbClient&&_fbConnected){
-    _sb.get('hm_app_data','hm_events').then(evts=>{
-      renderLivePanelFromEvents(evts||{});
+    _sbClient.from('hm_events').select('id,data').then(result=>{
+      const evts={}; (result.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; }); _eventsCache=evts;
+      renderLivePanelFromEvents(evts);
     }).catch(()=>{
       renderLivePanelFromEvents(JSON.parse(localStorage.getItem('hm_events_local')||'{}'));
     });
