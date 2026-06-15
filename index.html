@@ -3440,8 +3440,41 @@ function startSupabasePoll(){
           if(isDirecteur()) renderRayonsList();
         }
       }
+
+      // ── Polling des completions (fallback si Realtime WS défaillant) ──
+      if(isDirecteur()){
+        const rows = await _sb.getAll('hm_completions').catch(()=>null);
+        if(rows && rows.length>0){
+          let merged={};
+          rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+          const newHash=JSON.stringify(merged);
+          if(newHash !== (window._sbPollCompHash||'')){
+            window._sbPollCompHash=newHash;
+            completions=merged;
+            localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
+            renderTasks(); renderProgressBar(); renderDashboard();
+            if(_livePanel){
+              const r5=await _sbClient.from('hm_events').select('id,data').catch(()=>({data:[]}));
+              const evts5={}; (r5.data||[]).forEach(r=>{ if(r.data) evts5[r.id]=r.data; });
+              _eventsCache=evts5; renderLivePanelFromEvents(evts5);
+            }
+          }
+        }
+      } else if(currentUser){
+        const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
+        if(myComp && typeof myComp==='object'){
+          const newHash=JSON.stringify(myComp);
+          if(newHash !== (window._sbPollCompHash||'')){
+            window._sbPollCompHash=newHash;
+            completions=myComp;
+            localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
+            renderTasks(); renderProgressBar();
+            showToast('\uD83D\uDD04 Tâches synchronisées','#2980b9');
+          }
+        }
+      }
     }catch(e){}
-  }, 30000); // toutes les 30 secondes
+  }, 10000); // toutes les 10 secondes (au lieu de 30s)
 }
 
 // ── Nouveau rendu : basé sur les événements tâches (hm_events) ──
