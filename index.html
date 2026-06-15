@@ -1818,7 +1818,7 @@ function toggleTask(tid,freq){
 
   // ── Notification temps réel vers l'admin ──
   pushTaskEventToAdmin(tid, freq, isDone, task, r, now);
-  renderTasks();renderRoleHeader();renderProgressBar();renderSidebar();
+  renderTasks();renderRoleHeader();renderProgressBar();renderSidebar();renderDashboard();
 }
 function setFreq(f){currentFreq=f;renderControls();renderTasks();renderProgressBar();}
 function toggleAddForm(){
