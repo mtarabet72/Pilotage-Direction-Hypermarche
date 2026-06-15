@@ -1921,7 +1921,7 @@ function editCustomTask(id){
     saveData();broadcastUpdate();closeModal();renderTasks();renderProgressBar();
     showToast('✅ Tâche mise à jour','#27ae60');
   };
-  document.getElementById('modal-overlay').style.display='flex';
+  document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('edit-task-label')?.focus(),100);
 }
 
@@ -2159,13 +2159,13 @@ function _updateTacheField(el){
 }
 
 function _saveRayon(existingKey){
-  const nom=document.getElementById('mr-nom').value.trim();
-  if(!nom){alert('Le nom du rayon est requis.');return;}
-  const numero=parseInt(document.getElementById('mr-num').value)||0;
-  const dept=document.getElementById('mr-dept').value;
-  const secteur=document.getElementById('mr-secteur').value.trim()||'Commercial';
-  const chef=document.getElementById('mr-chef').value.trim()||'À affecter';
-  const sup=document.getElementById('mr-sup').value.trim()||'À affecter';
+  const nom=(document.getElementById('mr-nom')?.value||'').trim();
+  if(!nom){showToast('\u26a0\ufe0f Le nom du rayon est requis.','#e74c3c');return;}
+  const numero=parseInt(document.getElementById('mr-num')?.value)||0;
+  const dept=document.getElementById('mr-dept')?.value||'PGC';
+  const secteur=(existingKey&&customRayons[existingKey]?.secteur)||'Commercial';
+  const chef=(document.getElementById('mr-chef')?.value||'').trim()||'\u00c0 affecter';
+  const sup=(document.getElementById('mr-sup')?.value||'').trim()||'\u00c0 affecter';
   // Collecter les tâches depuis le DOM
   const tachesDom=[];
   document.querySelectorAll('#mr-taches-list [data-field="label"]').forEach((el,i)=>{
@@ -2235,7 +2235,12 @@ function openEditModal(roleId,taskId,isCustom){
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('me-label').focus(),100);
 }
-function closeModal(){document.getElementById('modal-overlay').classList.remove('open');modalSaveCallback=null;}
+function closeModal(){
+  const el=document.getElementById('modal-overlay');
+  el.classList.remove('open');
+  el.style.display='';
+  modalSaveCallback=null;
+}
 
 // ══════════════════════════════════════════════════════════════
 // GESTION DES UTILISATEURS
