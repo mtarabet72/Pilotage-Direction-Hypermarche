@@ -1459,7 +1459,7 @@ function getAllTasks(rid){
   const isAdmin=isDirecteur();
   const filteredCustom=isAdmin
     ? allCustom
-    : allCustom.filter(t=>t.assignedTo===uid);
+    : allCustom.filter(t=>!t.assignedTo||t.assignedTo===''||t.assignedTo===uid);
   // Vérifier si la tâche est applicable aujourd'hui (hebdo/mensuel)
   const today=new Date();
   const joursMap={0:'Dim',1:'Lun',2:'Mar',3:'Mer',4:'Jeu',5:'Ven',6:'Sam'};
@@ -1771,7 +1771,7 @@ function renderTasks(){
         ${t.note?`<div class="task-note">${t.note}</div>`:""}
         ${deadlineIndicator?`<div style="margin-top:5px;">${deadlineIndicator}</div>`:""}
       </div>
-      ${isCust&&isAdmin?`<button class="task-del" onclick="event.stopPropagation();delCustom('${t.id}')" title="Supprimer">✕</button>`:""}
+      ${isCust&&isAdmin?`<button class="task-edit-btn" onclick="event.stopPropagation();editCustomTask('${t.id}')" title="Modifier">✏️</button><button class="task-del" onclick="event.stopPropagation();delCustom('${t.id}')" title="Supprimer">✕</button>`:""}
     </div>`;
   }).join("");
 }
@@ -1875,6 +1875,47 @@ function delCustom(id){
   if(!confirm("Supprimer cette tâche ?"))return;
   if(customTasks[currentRoleId])customTasks[currentRoleId]=customTasks[currentRoleId].filter(t=>t.id!==id);
   saveData();broadcastUpdate();renderTasks();renderProgressBar();
+}
+function editCustomTask(id){
+  const tasks=customTasks[currentRoleId]||[];
+  const t=tasks.find(x=>x.id===id);
+  if(!t)return;
+  const freqOpts=['Q','H','M'].map(f=>`<option value="${f}"${t.freq===f?' selected':''}>${FL[f]}</option>`).join('');
+  const userOpts='<option value="">-- Aucun (broadcast) --</option>'+usersData.filter(u=>u.active&&u.id!==currentUser.id).map(u=>`<option value="${u.id}"${t.assignedTo===u.id?' selected':''}>${u.name} (@${u.username})</option>`).join('');
+  document.getElementById('modal-title').textContent='✏️ Modifier la tâche';
+  document.getElementById('modal-body').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">LIBELLÉ</label>
+        <input id="edit-task-label" type="text" value="${t.label.replace(/"/g,'&quot;')}" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:14px;outline:none;"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">NOTE / DESCRIPTION</label>
+        <input id="edit-task-note" type="text" value="${(t.note||'').replace(/"/g,'&quot;')}" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;outline:none;"></div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">FRÉQUENCE</label>
+          <select id="edit-task-freq" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;background:#fff;">${freqOpts}</select></div>
+        <div style="flex:1;"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">DEADLINE</label>
+          <input id="edit-task-deadline" type="time" value="${t.deadline||''}" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;"></div>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">ASSIGNÉ À</label>
+        <select id="edit-task-assignee" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;background:#fff;">${userOpts}</select></div>
+    </div>`;
+  modalSaveCallback=function(){
+    const label=document.getElementById('edit-task-label').value.trim();
+    if(!label){showToast('Le libellé est requis','#e74c3c');return;}
+    const idx=tasks.findIndex(x=>x.id===id);
+    if(idx===-1)return;
+    customTasks[currentRoleId][idx]={
+      ...t,
+      label,
+      note:document.getElementById('edit-task-note').value.trim(),
+      freq:document.getElementById('edit-task-freq').value,
+      deadline:document.getElementById('edit-task-deadline').value||'',
+      assignedTo:document.getElementById('edit-task-assignee').value||''
+    };
+    saveData();broadcastUpdate();closeModal();renderTasks();renderProgressBar();
+    showToast('✅ Tâche mise à jour','#27ae60');
+  };
+  document.getElementById('modal-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('edit-task-label')?.focus(),100);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3222,7 +3263,7 @@ function saveCustomTaskFromLib(){
   if(!_libSelectedTask){ showToast('⚠️ Choisissez une tâche dans la bibliothèque','#f39c12'); return; }
   const assignedTo = (document.getElementById('nt-assignee-lib')||{}).value||'';
   const task = {
-    id: 'lib_'+Date.now(),
+    id: 'c_lib_'+Date.now(),
     freq: _libSelectedTask.freq,
     label: _libSelectedTask.label,
     note: _libSelectedTask.note||'',
