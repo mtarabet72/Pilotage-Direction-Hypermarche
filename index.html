@@ -1189,7 +1189,12 @@ function saveDept(){
 function deleteCustomRole(id){
   if(!confirm('Supprimer ce département ? Les tâches associées seront perdues.')) return;
   customRoles = customRoles.filter(r=>r.id!==id);
-  saveCustomRoles();
+  // Nettoyer toutes les completions et tâches liées à ce rôle
+  Object.keys(completions).forEach(k=>{ if(k.includes('__'+id+'__')) delete completions[k]; });
+  completionLog=completionLog.filter(e=>e.roleId!==id);
+  delete customTasks[id];
+  delete taskOverrides[id];
+  saveCustomRoles(); saveData();
   renderCustomRolesList();
   renderDashboard(); renderSidebar();
   showToast('🗑️ Département supprimé','#e74c3c');
@@ -1563,19 +1568,21 @@ function renderDashboard(){
     document.getElementById("dash-period-label").textContent =
       dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:`📅 ${monthKey()}`;
 
-    const g = statsFor(visibleRoles, dashPeriod);
-    const rd = visibleRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
+    const activeVisRoles = visibleRoles.filter(r => getAllTasks(r.id).length > 0);
+    const g = statsFor(activeVisRoles, dashPeriod);
+    const rd = activeVisRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
 
     // Résumé personnel simplifié
     document.getElementById("dash-summary").innerHTML=`
       <div class="sum-card" style="border-top-color:#e63950"><div class="sc-val" style="color:#e63950">${g.pct}%</div><div class="sc-label">Mon avancement</div><div class="sc-sub" style="color:#e63950">${g.done}/${g.total} tâches</div></div>
       <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${visibleRoles.length}</div></div>
-      <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${g.total-g.done}</div><div class="sc-label">Tâches restantes</div><div class="sc-sub" style="color:#2980b9">${dashPeriod==="Q"?"Aujourd'hui":dashPeriod==="H"?"Cette semaine":"Ce mois"}</div></div>`;
+      <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${g.total-g.done}</div><div class="sc-label">Tâches restantes</div><div class="sc-sub" style="color:#2980b9">${dashPeriod==="Q"?"Aujourd'hui":dashPeriod==="H"?"Cette semaine":"Ce mois"}</div></div>
+      <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeVisRoles.length}</div></div>`;
 
     // Cards uniquement des rôles accessibles
     let html="";
     ["Commercial","Services"].forEach(secteur=>{
-      const roles=visibleRoles.filter(r=>r.secteur===secteur);
+      const roles=activeVisRoles.filter(r=>r.secteur===secteur);
       if(!roles.length)return;
       const sg=statsFor(roles,dashPeriod);
       const icon=secteur==="Commercial"?"🛍️":"⚙️";
@@ -1882,7 +1889,10 @@ function saveCustomTask(){
 function delCustom(id){
   if(!confirm("Supprimer cette tâche ?"))return;
   if(customTasks[currentRoleId])customTasks[currentRoleId]=customTasks[currentRoleId].filter(t=>t.id!==id);
-  saveData();broadcastUpdate();renderTasks();renderProgressBar();
+  // Nettoyer toutes les completions liées à cette tâche pour tous les periods et users
+  Object.keys(completions).forEach(k=>{ if(k.includes('__'+currentRoleId+'__'+id+'__')) delete completions[k]; });
+  completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===id));
+  saveData();broadcastUpdate();renderTasks();renderProgressBar();renderDashboard();
 }
 function editCustomTask(id){
   const tasks=customTasks[currentRoleId]||[];
@@ -2860,6 +2870,8 @@ function toggleHideTask(roleId,taskId){
   if(!taskOverrides[roleId])taskOverrides[roleId]={};
   const cur=(taskOverrides[roleId][taskId]||{}).hidden;
   taskOverrides[roleId][taskId]={...(taskOverrides[roleId][taskId]||{}),hidden:!cur};
+  // Si on masque la tâche, nettoyer ses completions
+  if(!cur){ Object.keys(completions).forEach(k=>{ if(k.includes('__'+roleId+'__'+taskId+'__')) delete completions[k]; }); completionLog=completionLog.filter(e=>!(e.roleId===roleId&&e.taskId===taskId)); }
   saveData();renderTaskMgmt();showToast(cur?'✅ Tâche affichée':'Tâche masquée',cur?'#27ae60':'#888');
 }
 function exportDataJSON(){
