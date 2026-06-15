@@ -400,8 +400,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <button class="login-btn" id="btn-login" type="button" onclick="doLogin()">🔐 Connexion</button>
     <div id="sb-loading-hint" style="display:none;font-size:11px;color:#3ecf8e;text-align:center;margin-top:6px;font-weight:600;"></div>
     <div class="login-error" id="login-error"></div>
-    <div class="login-hint" id="login-hint">Connexion initiale : admin / 1234</div>
-    <div style="text-align:center;margin-top:12px;"><button type="button" id="btn-reset-pw" onclick="resetLoginData()" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;">🔄 Réinitialiser le mot de passe</button></div>
+
   </div>
 </div>
 
@@ -1605,23 +1604,25 @@ function renderDashboard(){
     return;
   }
 
-  // ── Dashboard admin (inchangé) ──
-  const g = statsFor(visibleRoles, dashPeriod);
-  const gc = statsFor(visibleRoles.filter(r=>r.secteur==='Commercial'), dashPeriod);
-  const gs = statsFor(visibleRoles.filter(r=>r.secteur==='Services'), dashPeriod);
+  // ── Dashboard admin ──
+  // Filtrer uniquement les rôles qui ont des tâches assignées (évite d'afficher les rôles vides/supprimés)
+  const activeRoles = visibleRoles.filter(r => getAllTasks(r.id).length > 0);
+  const g = statsFor(activeRoles, dashPeriod);
+  const gc = statsFor(activeRoles.filter(r=>r.secteur==='Commercial'), dashPeriod);
+  const gs = statsFor(activeRoles.filter(r=>r.secteur==='Services'), dashPeriod);
   const pl=dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:`📅 ${monthKey()}`;
   document.getElementById("dash-period-label").textContent=pl;
-  const rd=visibleRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
+  const rd=activeRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
   document.getElementById("dash-summary").innerHTML=`
     <div class="sum-card" style="border-top-color:#e63950"><div class="sc-val" style="color:#e63950">${g.pct}%</div><div class="sc-label">Taux global</div><div class="sc-sub" style="color:#e63950">${g.done}/${g.total}</div></div>
     <div class="sum-card" style="border-top-color:#1a6b3c"><div class="sc-val" style="color:#1a6b3c">${gc.pct}%</div><div class="sc-label">Commercial</div><div class="sc-sub" style="color:#1a6b3c">${gc.done}/${gc.total}</div></div>
     <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${gs.pct}%</div><div class="sc-label">Services</div><div class="sc-sub" style="color:#2980b9">${gs.done}/${gs.total}</div></div>
-    <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${visibleRoles.length}</div></div>`;
+    <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeRoles.length}</div></div>`;
   let html="";
   ["Commercial","Services"].forEach(secteur=>{
-    const roles=visibleRoles.filter(r=>r.secteur===secteur);
+    const roles=activeRoles.filter(r=>r.secteur===secteur);
     if(roles.length===0)return;
-    const sg=getSecteurStats(secteur,dashPeriod);const icon=secteur==="Commercial"?"🛍️":"⚙️";
+    const sg=statsFor(roles,dashPeriod);const icon=secteur==="Commercial"?"🛍️":"⚙️";
     const pctColor=sg.pct>=80?"#27ae60":sg.pct>=50?"#f39c12":"#e74c3c";
     html+=`<div class="secteur-block"><div class="secteur-head"><span class="sh-icon">${icon}</span><span class="sh-name">${secteur}</span><div><span class="sh-pct" style="color:${pctColor}">${sg.pct}%</span><span style="font-size:10px;color:var(--muted);margin-left:5px;">${sg.done}/${sg.total}</span></div></div><div class="roles-grid">
     ${roles.map(r=>{
