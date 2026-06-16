@@ -1597,7 +1597,24 @@ function renderDashboard(){
           <div class="rc-bar-wrap"><div class="rc-bar" style="width:${pct}%;background:${r.color}"></div></div>
           <div class="rc-count">${s.done}/${s.total} · ${r.sous}</div>
           <div class="rc-tasks-preview"><div style="font-size:10px;font-weight:700;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">Tâches</div>
-          ${tasks.map(t=>{const done=completions[ck(r.id,t.id,t.freq)];return `<div class="rct-item"><div class="rct-dot" style="background:${done?r.color:"#e0e4ea"}"></div><span style="color:${done?"#555":"var(--text)"};text-decoration:${done?"line-through":""};flex:1">${t.label}</span><span style="color:${FC[t.freq]};font-size:9px;font-weight:700">${FL[t.freq][0]}</span></div>`;}).join("")}
+          ${tasks.map(t=>{
+            const done=completions[ck(r.id,t.id,t.freq)];
+            const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
+            let hBadge='';
+            if(t.deadline){
+              const lH=t.deadline==='12:00'?'🌅':'🌙';
+              if(done&&logEntry){
+                const dA=new Date(logEntry.completedAt);
+                const dS=dA.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+                const [dh2,dm2]=t.deadline.split(':').map(Number);
+                const oT=(dA.getHours()*60+dA.getMinutes())<=dh2*60+dm2;
+                hBadge='<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;background:'+(oT?'#eafaf1':'#fdecea')+';color:'+(oT?'#27ae60':'#e74c3c')+'">'+(oT?'🟢':'🔴')+' '+dS+'</span>';
+              } else {
+                hBadge='<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;background:#fef9f0;color:#e67e22">'+lH+' <'+t.deadline+'</span>';
+              }
+            }
+            return '<div class="rct-item"><div class="rct-dot" style="background:'+(done?r.color:'#e0e4ea')+'"></div><span style="color:'+(done?'#555':'var(--text)')+';text-decoration:'+(done?'line-through':'')+';flex:1">'+t.label+'</span>'+(hBadge||'<span style="color:'+FC[t.freq]+';font-size:9px;font-weight:700">'+FL[t.freq][0]+'</span>')+'</div>';
+          }).join("")}
           </div></div>`;}).join("")}
       </div></div>`;
     });
@@ -1640,7 +1657,24 @@ function renderDashboard(){
         <div class="rc-bar-wrap"><div class="rc-bar" style="width:${pct}%;background:${r.color}"></div></div>
         <div class="rc-count">${s.done}/${s.total} · ${r.sous}</div>
         <div class="rc-tasks-preview"><div style="font-size:10px;font-weight:700;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">Tâches</div>
-        ${tasks.map(t=>{const done=completions[ck(r.id,t.id,t.freq)];return `<div class="rct-item"><div class="rct-dot" style="background:${done?r.color:"#e0e4ea"}"></div><span style="color:${done?"#555":"var(--text)"};text-decoration:${done?"line-through":""};flex:1">${t.label}</span><span style="color:${FC[t.freq]};font-size:9px;font-weight:700">${FL[t.freq][0]}</span></div>`;}).join("")}
+        ${tasks.map(t=>{
+        const done=completions[ck(r.id,t.id,t.freq)];
+        const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
+        let horaireBadge='';
+        if(t.deadline){
+          const labelH=t.deadline==='12:00'?'🌅':'🌙';
+          if(done&&logEntry){
+            const doneAt=new Date(logEntry.completedAt);
+            const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+            const [dh,dm]=t.deadline.split(':').map(Number);
+            const onTime=(doneAt.getHours()*60+doneAt.getMinutes())<=dh*60+dm;
+            horaireBadge=`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'}">${onTime?'🟢':'🔴'} ${doneStr}</span>`;
+          } else {
+            horaireBadge=`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;background:#fef9f0;color:#e67e22">${labelH} <${t.deadline}</span>`;
+          }
+        }
+        return `<div class="rct-item"><div class="rct-dot" style="background:${done?r.color:'#e0e4ea'}"></div><span style="color:${done?'#555':'var(--text)'};text-decoration:${done?'line-through':''};flex:1">${t.label}</span>${horaireBadge||`<span style="color:${FC[t.freq]};font-size:9px;font-weight:700">${FL[t.freq][0]}</span>`}</div>`;
+      }).join("")}
         </div></div>`;}).join("")}
     </div></div>`;
   });
@@ -1753,23 +1787,26 @@ function renderTasks(){
     const completionEntry=isDirecteur()
       ? completionLog.find(e=>e.taskId===t.id&&e.roleId===currentRoleId&&e.period===periodKey(t.freq))
       : completionLog.find(e=>e.taskId===t.id&&e.roleId===currentRoleId&&e.period===periodKey(t.freq)&&e.userId===currentUser?.id);
-    // Indicateur deadline pour admin
+    // ── Badge horaire : affiché pour TOUS (admin + user) sur toutes les tâches avec deadline ──
     let deadlineIndicator='';
-    if(isAdmin && isCust && t.deadline){
+    if(t.deadline){
       const [dh,dm]=t.deadline.split(':').map(Number);
       const deadlineMin=dh*60+dm;
+      const labelHoraire=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
       if(done && completionEntry){
         const doneAt=new Date(completionEntry.completedAt);
         const doneMin=doneAt.getHours()*60+doneAt.getMinutes();
         const onTime=doneMin<=deadlineMin;
         const doneTimeStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-        const assigneeName=usersData.find(u=>u.id===t.assignedTo)?.name||'?';
-        deadlineIndicator=`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'};">${onTime?'🟢':'🔴'} ${doneTimeStr} · ${assigneeName}</span>`;
+        const who=isAdmin?(usersData.find(u=>u.id===completionEntry.userId)?.name||'?'):'';
+        deadlineIndicator=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'};border:1px solid ${onTime?'#a9dfbf':'#f5b7b1'}">${onTime?'🟢':'🔴'} ${labelHoraire} · ${doneTimeStr}${isAdmin&&who?' · '+who:''}</span>`;
       } else {
-        // Pas encore fait
         const enRetard=hNow>deadlineMin;
-        const assigneeName=usersData.find(u=>u.id===t.assignedTo)?.name||'?';
-        deadlineIndicator=`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:${enRetard?'#fdecea':'#fef9f0'};color:${enRetard?'#e74c3c':'#e67e22'};">${enRetard?'🔴':'⏳'} Avant ${t.deadline} · ${assigneeName}</span>`;
+        const statusIcon=enRetard?'🔴':'⏳';
+        const statusColor=enRetard?'#e74c3c':'#e67e22';
+        const statusBg=enRetard?'#fdecea':'#fef9f0';
+        const who=isAdmin&&t.assignedTo?(usersData.find(u=>u.id===t.assignedTo)?.name||''):'';
+        deadlineIndicator=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;background:${statusBg};color:${statusColor};border:1px solid ${enRetard?'#f5b7b1':'#fde8c0'}">${statusIcon} ${labelHoraire} · avant ${t.deadline}${isAdmin&&who?' · '+who:''}</span>`;
       }
     }
     const clickHandler=(canEdit&&!isAdmin)?`toggleTask('${t.id}','${t.freq}')`:"";
@@ -1804,6 +1841,21 @@ function toggleTask(tid,freq){
   // L'admin ne coche pas — uniquement les users
   if(isDirecteur()){showToast("Le Directeur suit les tâches, il ne les coche pas","#f39c12");return;}
   if(!canEditRole(currentRoleId)){showToast("Accès non autorisé","#e74c3c");return;}
+  // ── Vérification horaire deadline (MATIN avant 12h / SOIR avant 22h) ──
+  const taskForCheck=getAllTasks(currentRoleId).find(t=>t.id===tid);
+  if(taskForCheck && taskForCheck.deadline){
+    const now=new Date();
+    const hNow=now.getHours()*60+now.getMinutes();
+    const [dh,dm]=taskForCheck.deadline.split(':').map(Number);
+    const deadlineMin=dh*60+dm;
+    const alreadyDone=!!completions[ck(currentRoleId,tid,freq)];
+    // Bloquer seulement si on essaie de cocher (pas de décocher) et hors horaire
+    if(!alreadyDone && hNow>deadlineMin){
+      const periode=taskForCheck.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+      showToast(`⛔ Hors délai — ${periode} : validation avant ${taskForCheck.deadline} uniquement`,'#e74c3c');
+      return;
+    }
+  }
   const key=ck(currentRoleId,tid,freq);const isDone=!completions[key];completions[key]=isDone;
   const r=getRole(currentRoleId);const task=getAllTasks(currentRoleId).find(t=>t.id===tid);
   const now=new Date();
@@ -2472,9 +2524,38 @@ function buildDailyResults(dateStr){
   const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
   let rolesHtml='';
   getAllRoles().forEach(r=>{
-    const rd=logs.filter(e=>e.roleId===r.id).length;const totalRQ=getAllTasks(r.id).filter(t=>t.freq==='Q').length;
+    const rLogs=logs.filter(e=>e.roleId===r.id);
+    const rd=rLogs.length;const totalRQ=getAllTasks(r.id).filter(t=>t.freq==='Q').length;
     const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
-    rolesHtml+=`<div class="res-role-row"><span class="res-role-icon">${r.icon}</span><span class="res-role-name">${r.label}</span><div class="res-role-bar-wrap"><div class="res-role-bar" style="width:${rPct}%;background:${r.color}"></div></div><span class="res-role-pct" style="color:${rPc}">${rPct}%</span><span class="res-role-ct">${rd}/${totalRQ}</span></div>`;
+    // Détail des tâches avec horaire
+    const tasksDetail=getAllTasks(r.id).filter(t=>t.freq==='Q').map(t=>{
+      const logE=rLogs.find(e=>e.taskId===t.id);
+      const done=!!logE;
+      let horaireHtml='';
+      if(t.deadline){
+        const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+        if(done&&logE){
+          const doneAt=new Date(logE.completedAt);
+          const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+          const [dh,dm]=t.deadline.split(':').map(Number);
+          const onTime=(doneAt.getHours()*60+doneAt.getMinutes())<=dh*60+dm;
+          const who=usersData.find(u=>u.id===logE.userId)?.name||'';
+          horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'}">${onTime?'🟢':'🔴'} ${labelH} · ${doneStr}${who?' · '+who:''}</span>`;
+        } else {
+          const labelH2=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+          horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fdecea;color:#e74c3c">⛔ ${labelH2} · avant ${t.deadline}</span>`;
+        }
+      }
+      return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;">
+        <span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span>
+        <span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>
+        ${horaireHtml}
+      </div>`;
+    }).join('');
+    rolesHtml+=`<div class="res-role-row" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;align-items:center;gap:6px;"><span class="res-role-icon">${r.icon}</span><span class="res-role-name">${r.label}</span><div class="res-role-bar-wrap" style="flex:1"><div class="res-role-bar" style="width:${rPct}%;background:${r.color}"></div></div><span class="res-role-pct" style="color:${rPc}">${rPct}%</span><span class="res-role-ct">${rd}/${totalRQ}</span></div>
+      ${tasksDetail?`<div style="margin:6px 0 4px 28px;">${tasksDetail}</div>`:''}
+    </div>`;
   });
   return `<div class="res-card"><h3>📅 Journalier — ${dayLabel}</h3>
     <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${pc}">${pct}%</div><div class="res-stat-lbl">Taux complétion</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2980b9">${doneCount}</div><div class="res-stat-lbl">Tâches réalisées</div></div><div class="res-stat"><div class="res-stat-val" style="color:#e74c3c">${totalQ-doneCount}</div><div class="res-stat-lbl">Non réalisées</div></div><div class="res-stat"><div class="res-stat-val">${totalQ}</div><div class="res-stat-lbl">Total Q</div></div></div>
@@ -2519,7 +2600,36 @@ function buildWeeklyResults(dateStr){
     <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Score global</div></div><div class="res-stat"><div class="res-stat-val" style="color:#f39c12">${pctH}%</div><div class="res-stat-lbl">Tâches Hebdo (H)</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2980b9">${totalDoneQ}</div><div class="res-stat-lbl">Tâches Q réalisées</div></div><div class="res-stat"><div class="res-stat-val" style="color:#27ae60">${doneH}/${totalH}</div><div class="res-stat-lbl">Tâches H réalisées</div></div></div>
     <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Détail journalier</div>${daysHtml}
     <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tâches hebdomadaires</div>
-    ${doneH>0?hLogs.map(e=>`<div style="padding:6px 12px;background:#fef3e2;border-radius:6px;margin-bottom:4px;font-size:12px;color:#b85c00;">✓ <strong>${e.roleLabel}</strong> — ${e.taskLabel}</div>`).join(''):`<div style="color:var(--muted);font-size:12px;padding:8px 0;">Aucune tâche H enregistrée.</div>`}
+    ${(()=>{
+      let hDetailHtml='';
+      getAllRoles().forEach(r=>{
+        const rHLogs=hLogs.filter(e=>e.roleId===r.id);
+        const rHTasks=getAllTasks(r.id).filter(t=>t.freq==='H');
+        if(!rHTasks.length)return;
+        const rd=rHLogs.length,totalR=rHTasks.length;
+        const rPct=totalR?Math.round(rd/totalR*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
+        const tasksHtml=rHTasks.map(t=>{
+          const logE=rHLogs.find(e=>e.taskId===t.id);const done=!!logE;
+          let hBadge='';
+          if(t.deadline){
+            const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+            if(done&&logE){
+              const doneAt=new Date(logE.completedAt);
+              const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+              const [dh,dm]=t.deadline.split(':').map(Number);
+              const onTime=(doneAt.getHours()*60+doneAt.getMinutes())<=dh*60+dm;
+              const who=usersData.find(u=>u.id===logE.userId)?.name||'';
+              hBadge=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'}">${onTime?'🟢':'🔴'} ${labelH} · ${doneStr}${who?' · '+who:''}</span>`;
+            } else {
+              hBadge=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fdecea;color:#e74c3c">⛔ ${labelH} · avant ${t.deadline}</span>`;
+            }
+          }
+          return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>${hBadge}</div>`;
+        }).join('');
+        hDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${totalR})</span></div>${tasksHtml}</div>`;
+      });
+      return hDetailHtml||`<div style="color:var(--muted);font-size:12px;padding:8px 0;">Aucune tâche H enregistrée.</div>`;
+    })()}
   </div>`;
 }
 
@@ -3462,11 +3572,33 @@ function selectLibTask(taskId, catId){
 function saveCustomTaskFromLib(){
   if(!_libSelectedTask){ showToast('⚠️ Choisissez une tâche dans la bibliothèque','#f39c12'); return; }
   const assignedTo = (document.getElementById('nt-assignee-lib')||{}).value||'';
+  const freq = _libSelectedTask.freq;
+  // ── Récupérer deadline + jours + datesMois depuis le formulaire ──
+  let deadline='', jours=[], datesMois=[], periodeNote='';
+  if(freq==='Q'){
+    const moment=document.querySelector('input[name="q-moment"]:checked')?.value||'MATIN';
+    deadline=moment==='MATIN'?'12:00':'22:00';
+    periodeNote='⏰ '+moment+' (avant '+(moment==='MATIN'?'12h':'22h')+')';
+  } else if(freq==='H'){
+    jours=[...document.querySelectorAll('.jour-chk:checked')].map(c=>c.value);
+    const moment=document.querySelector('input[name="h-moment"]:checked')?.value||'MATIN';
+    deadline=moment==='MATIN'?'12:00':'22:00';
+    periodeNote='📅 '+(jours.length?jours.join(', '):'Tous les jours')+' — '+moment+' avant '+(moment==='MATIN'?'12h':'22h');
+  } else if(freq==='M'){
+    const datePrec=document.getElementById('nt-m-date')?.value.trim()||'';
+    const moment=document.querySelector('input[name="m-moment"]:checked')?.value||'MATIN';
+    deadline=moment==='MATIN'?'12:00':'22:00';
+    periodeNote='🗓️ '+(datePrec||'À définir')+' — '+moment+' avant '+(moment==='MATIN'?'12h':'22h');
+    datesMois=datePrec?datePrec.split(',').map(d=>d.trim()):[];
+  }
   const task = {
     id: 'c_lib_'+Date.now(),
-    freq: _libSelectedTask.freq,
+    freq,
     label: _libSelectedTask.label,
-    note: _libSelectedTask.note||'',
+    note: _libSelectedTask.note ? _libSelectedTask.note+(periodeNote?'\n'+periodeNote:'') : periodeNote,
+    deadline,
+    jours,
+    datesMois,
     sourceLib: _libSelectedTask.id,
     assignedTo,
     createdBy: currentUser?.id,
