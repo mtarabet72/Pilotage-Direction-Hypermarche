@@ -229,6 +229,19 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 .task-edit-btn{background:none;border:none;cursor:pointer;color:#d0d5de;font-size:14px;padding:0 2px;flex-shrink:0;transition:color .15s;touch-action:manipulation;}
 .task-edit-btn:hover{color:#2980b9;}
 .task-item.read-only{cursor:default;opacity:.8;}
+.task-note-btn{background:none;border:none;cursor:pointer;color:#d0d5de;font-size:14px;padding:0 2px;flex-shrink:0;transition:color .15s;touch-action:manipulation;}
+.task-note-btn:hover{color:#8e44ad;}
+.task-note-btn.has-note{color:#8e44ad;}
+.task-comment-display{font-size:11.5px;color:#5b4b73;background:#f7f1fb;border:1px solid #e9d9f7;border-radius:7px;padding:6px 9px;margin-top:6px;line-height:1.4;}
+.task-comment-display .tc-who{font-weight:700;color:#8e44ad;font-size:10.5px;margin-right:4px;}
+.task-attach-display{margin-top:6px;display:flex;align-items:center;gap:8px;}
+.task-attach-display img{max-width:84px;max-height:64px;border-radius:6px;border:1px solid var(--border);cursor:pointer;object-fit:cover;}
+.task-attach-display a{font-size:11px;color:#2980b9;text-decoration:none;font-weight:600;background:#eaf3fb;padding:4px 9px;border-radius:8px;}
+.note-word-count{font-size:10.5px;color:var(--muted);text-align:right;margin-top:3px;}
+.note-word-count.over{color:#e74c3c;font-weight:700;}
+.note-file-preview{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);}
+.note-file-preview img{max-width:90px;max-height:70px;border-radius:6px;border:1px solid var(--border);}
+.note-file-remove{background:none;border:none;color:#e74c3c;cursor:pointer;font-size:13px;font-weight:700;}
 #progress-bottom{margin-top:16px;background:var(--white);border-radius:var(--radius);padding:14px 18px;border:1px solid var(--border);}
 .pb-row{display:flex;justify-content:space-between;margin-bottom:6px;}
 .pb-title{font-size:12px;font-weight:700;color:#555;}
@@ -968,6 +981,9 @@ const ROLE_COLORS={directeur:"#e63950",chef_secteur:"#2980b9",chef_rayon:"#27ae6
 const ROLE_LABELS={directeur:"Directeur (Admin)",chef_secteur:"Chef Secteur / Département",chef_rayon:"Chef de Rayon"};
 
 let completions={},customTasks={},completionLog=[],taskOverrides={},customRoles=[];
+let taskNotes={}; // commentaires + pièces jointes par tâche : clé = ck(rid,tid,freq) → {comment,fileName,fileType,fileSize,fileData,userId,userName,updatedAt}
+const TASK_NOTE_MAX_WORDS=150;
+const TASK_FILE_MAX_BYTES=2*1024*1024; // 2 Mo
 let companyData={nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""};
 let usersData=[];
 let currentUser=null;
@@ -996,6 +1012,7 @@ function loadData(){
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
   try{taskOverrides=JSON.parse(localStorage.getItem("hm_overrides")||"{}");}catch(e){}
+  try{taskNotes=JSON.parse(localStorage.getItem("hm_task_notes")||"{}");}catch(e){taskNotes={};}
   try{customRoles=JSON.parse(localStorage.getItem("hm_custom_roles")||"[]");}catch(e){customRoles=[];}
   try{companyData=Object.assign({nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""},JSON.parse(localStorage.getItem("hm_company")||"{}"));}catch(e){}
   try{usersData=JSON.parse(localStorage.getItem("hm_users")||"[]");}catch(e){usersData=[];}
@@ -1038,6 +1055,16 @@ function saveData(){
     }
   } else if(!_sbClient){
     // Pas de Supabase configuré : localStorage uniquement, pas de warning
+  }
+}
+function saveTaskNotes(){
+  // Sauvegarde dédiée : appelée uniquement à la modification d'un commentaire/pièce jointe
+  // (pas à chaque coche de tâche, pour éviter de re-uploader les pièces jointes en boucle)
+  try{ localStorage.setItem("hm_task_notes", JSON.stringify(taskNotes)); }catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_task_notes', taskNotes).catch(()=>{
+      showToast('⚠️ Pièce jointe trop lourde pour la synchronisation','#e74c3c');
+    });
   }
 }
 function saveCompanyData(){
@@ -1275,8 +1302,9 @@ function onLoginSuccess(){
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
         _sb.get('hm_app_data','hm_custom_roles'),
-        _sb.get('hm_app_data','hm_rayons')
-      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons])=>{
+        _sb.get('hm_app_data','hm_rayons'),
+        _sb.get('hm_app_data','hm_task_notes')
+      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons,tn])=>{
         const evts={}; (evtsResult.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
         // Users : source de vérité Supabase
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
@@ -1314,6 +1342,10 @@ function onLoginSuccess(){
           customRayons=sbRayons;
           localStorage.setItem('hm_rayons',JSON.stringify(customRayons));
         }
+        if(tn && typeof tn==='object'){
+          taskNotes=tn;
+          localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
+        }
         renderRayonsList(); renderSelectRayon();
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
@@ -1324,8 +1356,9 @@ function onLoginSuccess(){
         _sb.get('hm_completions', uid),
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
-        _sb.get('hm_app_data','hm_custom_roles')
-      ]).then(([sbUsers,myComp, ct, ov, cr])=>{
+        _sb.get('hm_app_data','hm_custom_roles'),
+        _sb.get('hm_app_data','hm_task_notes')
+      ]).then(([sbUsers,myComp, ct, ov, cr, tn])=>{
         // Mettre à jour la liste users (pour les noms dans les tâches assignées)
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
           const localById={};
@@ -1352,6 +1385,10 @@ function onLoginSuccess(){
         if(cr && Array.isArray(cr) && cr.length>0){
           customRoles=cr;
           localStorage.setItem('hm_custom_roles',JSON.stringify(customRoles));
+        }
+        if(tn && typeof tn==='object'){
+          taskNotes=tn;
+          localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderSelectRayon();
         renderTasks(); renderProgressBar(); renderDashboard();
@@ -1511,6 +1548,15 @@ function todayKey(){return new Date().toISOString().slice(0,10);}
 function weekKey(){const d=new Date(),j=new Date(d.getFullYear(),0,1);const w=Math.ceil(((d-j)/864e5+j.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,"0")}`;}
 function monthKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
 function periodKey(freq){if(freq==="Q")return todayKey();if(freq==="H")return weekKey();return monthKey();}
+// Détermine Matin/Soir à partir de l'heure réelle choisie (avant ou après midi),
+// et non plus par une comparaison stricte avec "12:00" qui faisait passer tout horaire
+// personnalisé (ex: 09:30) en "Soir" à tort.
+function deadlinePeriodInfo(deadline){
+  if(!deadline)return{emoji:'',label:''};
+  const [h,m]=deadline.split(':').map(Number);
+  const isMatin=h<12||(h===12&&m===0);
+  return isMatin?{emoji:'🌅',label:'Matin'}:{emoji:'🌙',label:'Soir'};
+}
 function ck(rid,tid,freq){
   // Clé isolée par utilisateur : chaque user a ses propres completions
   const uid = currentUser ? currentUser.id : 'guest';
@@ -1524,6 +1570,43 @@ function isTaskDone(rid, tid, freq){
     return Object.keys(completions).some(k => k.endsWith(suffix) && completions[k]);
   }
   return !!completions[ck(rid,tid,freq)];
+}
+// ── Commentaires & pièces jointes par tâche ──
+function getTaskNote(rid,tid,freq){
+  if(isDirecteur()){
+    // Admin : retrouver la note écrite par n'importe quel user pour cette tâche/période
+    const suffix='__'+rid+'__'+tid+'__'+periodKey(freq);
+    const k=Object.keys(taskNotes).find(key=>key.endsWith(suffix));
+    return k?taskNotes[k]:null;
+  }
+  return taskNotes[ck(rid,tid,freq)]||null;
+}
+// Pour le rapport exporté : toujours retrouver la note quel que soit l'utilisateur qui génère le rapport
+function getTaskNoteAny(rid,tid,freq){
+  const suffix='__'+rid+'__'+tid+'__'+periodKey(freq);
+  const k=Object.keys(taskNotes).find(key=>key.endsWith(suffix));
+  return k?taskNotes[k]:null;
+}
+// Bloc HTML commentaire + pièce jointe inséré dans la cellule "Tâche" du rapport exporté
+function buildReportNoteHtml(rid,tid,freq){
+  const note=getTaskNoteAny(rid,tid,freq);
+  if(!note)return '';
+  let html='';
+  if(note.comment){
+    const who=note.userName?`<strong>${note.userName.replace(/</g,'&lt;')} :</strong> `:'';
+    html+=`<div class="report-comment">💬 ${who}${note.comment.replace(/</g,'&lt;')}</div>`;
+  }
+  if(note.fileData){
+    const isImg=(note.fileType||'').startsWith('image/');
+    const sizeKb=note.fileSize?Math.round(note.fileSize/1024)+' Ko':'';
+    html+=isImg
+      ? `<div class="report-attach"><img src="${note.fileData}" alt=""><span>📎 ${(note.fileName||'').replace(/</g,'&lt;')} ${sizeKb}</span></div>`
+      : `<div class="report-attach"><span>📎 ${(note.fileName||'fichier').replace(/</g,'&lt;')} ${sizeKb}</span></div>`;
+  }
+  return html;
+}
+function countWords(str){
+  return (str||'').trim().split(/\s+/).filter(Boolean).length;
 }
 function weekKeyForDate(s){const d=new Date(s+'T00:00:00'),j=new Date(d.getFullYear(),0,1),w=Math.ceil(((d-j)/864e5+j.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,'0')}`;}
 function getWeekDates(s){const d=new Date(s+'T00:00:00'),day=d.getDay(),diff=day===0?-6:1-day,mon=new Date(d);mon.setDate(d.getDate()+diff);const r=[];for(let i=0;i<7;i++){const x=new Date(mon);x.setDate(mon.getDate()+i);r.push(x.toISOString().slice(0,10));}return r;}
@@ -1602,7 +1685,7 @@ function renderDashboard(){
             const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
             let hBadge='';
             if(t.deadline){
-              const lH=t.deadline==='12:00'?'🌅':'🌙';
+              const lH=deadlinePeriodInfo(t.deadline).emoji;
               if(done&&logEntry){
                 const dA=new Date(logEntry.completedAt);
                 const dS=dA.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -1662,7 +1745,7 @@ function renderDashboard(){
         const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
         let horaireBadge='';
         if(t.deadline){
-          const labelH=t.deadline==='12:00'?'🌅':'🌙';
+          const labelH=deadlinePeriodInfo(t.deadline).emoji;
           if(done&&logEntry){
             const doneAt=new Date(logEntry.completedAt);
             const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -1792,7 +1875,8 @@ function renderTasks(){
     if(t.deadline){
       const [dh,dm]=t.deadline.split(':').map(Number);
       const deadlineMin=dh*60+dm;
-      const labelHoraire=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+      const dpi=deadlinePeriodInfo(t.deadline);
+      const labelHoraire=`${dpi.emoji} ${dpi.label}`;
       if(done && completionEntry){
         const doneAt=new Date(completionEntry.completedAt);
         const doneMin=doneAt.getHours()*60+doneAt.getMinutes();
@@ -1813,6 +1897,23 @@ function renderTasks(){
     const itemStyle=done?`background:${r.light};border-color:${r.color}22`:"";
     const checkStyle=done?`background:${r.color};border-color:${r.color}`:"";
     const checkExtra=(!canEdit||isAdmin)?"opacity:0.4;cursor:default":"";
+    // ── Commentaire & pièce jointe (visibles pour tous, modifiables par le chef de rayon) ──
+    const note=getTaskNote(currentRoleId,t.id,t.freq);
+    const noteAuthor=note?(usersData.find(u=>u.id===note.userId)?.name||note.userName||''):'';
+    let commentHtml='';
+    if(note&&note.comment){
+      commentHtml=`<div class="task-comment-display">💬 ${isAdmin&&noteAuthor?`<span class="tc-who">${noteAuthor} :</span>`:''}${note.comment.replace(/</g,'&lt;')}</div>`;
+    }
+    let attachHtml='';
+    if(note&&note.fileData){
+      const isImg=(note.fileType||'').startsWith('image/');
+      const sizeKb=note.fileSize?Math.round(note.fileSize/1024)+' Ko':'';
+      const safeName=(note.fileName||'').replace(/"/g,'&quot;');
+      attachHtml=isImg
+        ? `<div class="task-attach-display"><a href="${note.fileData}" target="_blank" onclick="event.stopPropagation()"><img src="${note.fileData}" alt="${safeName}"></a><span style="font-size:11px;color:var(--muted);">📎 ${note.fileName||''} ${sizeKb}</span></div>`
+        : `<div class="task-attach-display"><a href="${note.fileData}" download="${safeName||'piece-jointe'}" onclick="event.stopPropagation()">📎 ${note.fileName||'fichier'} ${sizeKb}</a></div>`;
+    }
+    const noteBtn=(canEdit&&!isAdmin)?`<button class="task-note-btn${note?' has-note':''}" onclick="event.stopPropagation();openTaskNoteModal('${t.id}','${t.freq}')" title="Commentaire / pièce jointe">💬</button>`:"";
     return `<div class="task-item${done?" done-item":""}${!canEdit?" read-only":""}" onclick="${clickHandler}" style="${itemStyle}" id="ti_${t.id}">
       <div class="task-check" style="${checkStyle}${checkExtra}">${done?"✓":""}</div>
       <div class="task-body" style="flex:1;">
@@ -1822,7 +1923,9 @@ function renderTasks(){
         </div>
         ${t.note?`<div class="task-note">${t.note}</div>`:""}
         ${deadlineIndicator?`<div style="margin-top:5px;">${deadlineIndicator}</div>`:""}
+        ${commentHtml}${attachHtml}
       </div>
+      ${noteBtn}
       ${isCust&&isAdmin?`<button class="task-edit-btn" onclick="event.stopPropagation();editCustomTask('${t.id}')" title="Modifier">✏️</button><button class="task-del" onclick="event.stopPropagation();delCustom('${t.id}')" title="Supprimer">✕</button>`:""}
     </div>`;
   }).join("");
@@ -1851,7 +1954,8 @@ function toggleTask(tid,freq){
     const alreadyDone=!!completions[ck(currentRoleId,tid,freq)];
     // Bloquer seulement si on essaie de cocher (pas de décocher) et hors horaire
     if(!alreadyDone && hNow>deadlineMin){
-      const periode=taskForCheck.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+      const _dpi=deadlinePeriodInfo(taskForCheck.deadline);
+      const periode=`${_dpi.emoji} ${_dpi.label}`;
       showToast(`⛔ Hors délai — ${periode} : validation avant ${taskForCheck.deadline} uniquement`,'#e74c3c');
       return;
     }
@@ -1944,6 +2048,9 @@ function delCustom(id){
   // Nettoyer toutes les completions liées à cette tâche pour tous les periods et users
   Object.keys(completions).forEach(k=>{ if(k.includes('__'+currentRoleId+'__'+id+'__')) delete completions[k]; });
   completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===id));
+  let notesChanged=false;
+  Object.keys(taskNotes).forEach(k=>{ if(k.includes('__'+currentRoleId+'__'+id+'__')){ delete taskNotes[k]; notesChanged=true; } });
+  if(notesChanged)saveTaskNotes();
   saveData();broadcastUpdate();renderTasks();renderProgressBar();renderDashboard();
 }
 function editCustomTask(id){
@@ -1986,6 +2093,87 @@ function editCustomTask(id){
   };
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('edit-task-label')?.focus(),100);
+}
+
+// ══════════════════════════════════════════════════════════════
+// COMMENTAIRE & PIÈCE JOINTE PAR TÂCHE
+// ══════════════════════════════════════════════════════════════
+let _modalNoteRoleId=null,_modalNoteTaskId=null,_modalNoteFreq=null,_pendingNoteFile=undefined;
+// _pendingNoteFile : undefined = inchangé, null = supprimé par l'utilisateur, objet = nouveau fichier choisi
+function openTaskNoteModal(taskId,freq){
+  _modalNoteRoleId=currentRoleId;_modalNoteTaskId=taskId;_modalNoteFreq=freq;_pendingNoteFile=undefined;
+  const existing=getTaskNote(currentRoleId,taskId,freq);
+  document.getElementById('modal-title').textContent='💬 Commentaire & pièce jointe';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="modal-field">
+      <label>Commentaire (150 mots maximum)</label>
+      <textarea id="note-comment" rows="4" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;outline:none;resize:vertical;font-family:inherit;" oninput="updateNoteWordCount()">${(existing&&existing.comment)?existing.comment.replace(/</g,'&lt;'):''}</textarea>
+      <div class="note-word-count" id="note-word-count">0 / ${TASK_NOTE_MAX_WORDS} mots</div>
+    </div>
+    <div class="modal-field">
+      <label>Pièce jointe — image ou fichier (2 Mo max)</label>
+      <input type="file" id="note-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onchange="handleNoteFileChange(event)" style="width:100%;font-size:12px;">
+      <div id="note-file-preview"></div>
+    </div>`;
+  modalSaveCallback=function(){
+    const comment=document.getElementById('note-comment').value.trim();
+    const wc=countWords(comment);
+    if(wc>TASK_NOTE_MAX_WORDS){showToast(`⚠️ Commentaire trop long : ${wc}/${TASK_NOTE_MAX_WORDS} mots`,'#e74c3c');return;}
+    const key=ck(_modalNoteRoleId,_modalNoteTaskId,_modalNoteFreq);
+    const prev=taskNotes[key]||{};
+    let fileFields;
+    if(_pendingNoteFile===null) fileFields={fileName:null,fileType:null,fileSize:null,fileData:null};
+    else if(_pendingNoteFile) fileFields={fileName:_pendingNoteFile.fileName,fileType:_pendingNoteFile.fileType,fileSize:_pendingNoteFile.fileSize,fileData:_pendingNoteFile.fileData};
+    else fileFields={fileName:prev.fileName||null,fileType:prev.fileType||null,fileSize:prev.fileSize||null,fileData:prev.fileData||null};
+    if(!comment && !fileFields.fileData){
+      delete taskNotes[key];
+    } else {
+      taskNotes[key]={comment,...fileFields,userId:currentUser?.id,userName:currentUser?.name||'',updatedAt:new Date().toISOString()};
+    }
+    saveTaskNotes();closeModal();renderTasks();
+    showToast('✅ Enregistré','#27ae60');
+  };
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(()=>{updateNoteWordCount();renderNoteFilePreview();document.getElementById('note-comment')?.focus();},100);
+}
+function updateNoteWordCount(){
+  const ta=document.getElementById('note-comment');const el=document.getElementById('note-word-count');
+  if(!ta||!el)return;
+  const wc=countWords(ta.value);
+  el.textContent=`${wc} / ${TASK_NOTE_MAX_WORDS} mots`;
+  el.classList.toggle('over',wc>TASK_NOTE_MAX_WORDS);
+}
+function handleNoteFileChange(e){
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  if(file.size>TASK_FILE_MAX_BYTES){
+    showToast('⚠️ Fichier trop volumineux — 2 Mo maximum','#e74c3c');
+    e.target.value='';
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=function(){
+    _pendingNoteFile={fileName:file.name,fileType:file.type||'application/octet-stream',fileSize:file.size,fileData:reader.result};
+    renderNoteFilePreview();
+  };
+  reader.onerror=function(){showToast('⚠️ Lecture du fichier impossible','#e74c3c');};
+  reader.readAsDataURL(file);
+}
+function renderNoteFilePreview(){
+  const el=document.getElementById('note-file-preview');if(!el)return;
+  let f;
+  if(_pendingNoteFile===null){f=null;}
+  else if(_pendingNoteFile){f=_pendingNoteFile;}
+  else{const existing=getTaskNote(_modalNoteRoleId,_modalNoteTaskId,_modalNoteFreq);f=(existing&&existing.fileData)?existing:null;}
+  if(!f){el.innerHTML='';return;}
+  const isImg=(f.fileType||'').startsWith('image/');
+  const sizeKb=f.fileSize?Math.round(f.fileSize/1024)+' Ko':'';
+  el.innerHTML=`<div class="note-file-preview">${isImg?`<img src="${f.fileData}" alt="">`:'📎'}<span>${(f.fileName||'').replace(/</g,'&lt;')} ${sizeKb}</span><button type="button" class="note-file-remove" onclick="removeNoteFile()">✕ Retirer</button></div>`;
+}
+function removeNoteFile(){
+  _pendingNoteFile=null;
+  const inp=document.getElementById('note-file-input');if(inp)inp.value='';
+  renderNoteFilePreview();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2533,7 +2721,8 @@ function buildDailyResults(dateStr){
       const done=!!logE;
       let horaireHtml='';
       if(t.deadline){
-        const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+        const _dpiD=deadlinePeriodInfo(t.deadline);
+        const labelH=`${_dpiD.emoji} ${_dpiD.label}`;
         if(done&&logE){
           const doneAt=new Date(logE.completedAt);
           const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -2542,7 +2731,7 @@ function buildDailyResults(dateStr){
           const who=usersData.find(u=>u.id===logE.userId)?.name||'';
           horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'}">${onTime?'🟢':'🔴'} ${labelH} · ${doneStr}${who?' · '+who:''}</span>`;
         } else {
-          const labelH2=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+          const labelH2=labelH;
           horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fdecea;color:#e74c3c">⛔ ${labelH2} · avant ${t.deadline}</span>`;
         }
       }
@@ -2612,7 +2801,7 @@ function buildWeeklyResults(dateStr){
           const logE=rHLogs.find(e=>e.taskId===t.id);const done=!!logE;
           let hBadge='';
           if(t.deadline){
-            const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+            const labelH=`${deadlinePeriodInfo(t.deadline).emoji} ${deadlinePeriodInfo(t.deadline).label}`;
             if(done&&logE){
               const doneAt=new Date(logE.completedAt);
               const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -2675,7 +2864,7 @@ function buildReportHTML(forPrint=false){
     const filteredTasks=tasks.filter(t=>(t._done&&showDone)||(!t._done&&showTodo));
     if(!filteredTasks.length&&!showDone&&!showTodo)return;
     body+=`<div class="role-block"><div class="role-head" style="background:${r.light};border-left:4px solid ${r.color};"><span class="rh-icon">${r.icon}</span><span class="rh-name" style="color:${r.color};">${r.label}</span><span class="rh-sous">${r.sous}</span><span class="rh-pct" style="color:${pctColor};">${pct}%</span><span class="rh-ct">${done}/${tasks.length}</span></div>
-    ${filteredTasks.length===0?`<div class="no-task">Aucune tâche.</div>`:`<table><thead><tr><th style="width:22px;">✓</th><th>Tâche</th><th style="width:70px;">Fréq.</th>${showNote?`<th style="width:32%;">Consigne</th>`:""}</tr></thead><tbody>${filteredTasks.map((t,i)=>`<tr class="${i%2===0?'even':'odd'}"><td style="text-align:center;"><span class="chk" style="border-color:${t._done?r.color:"#ccc"};background:${t._done?r.color:"#fff"};">${t._done?"✓":""}</span></td><td style="color:${t._done?"#999":"#1a1f2e"};text-decoration:${t._done?"line-through":"none"};">${t.label}</td><td style="text-align:center;"><span class="fbadge" style="background:${FC[t.freq]}18;color:${FC[t.freq]};">${FL[t.freq]}</span></td>${showNote?`<td class="note-cell">${t.note||""}</td>`:""}</tr>`).join("")}</tbody></table>`}
+    ${filteredTasks.length===0?`<div class="no-task">Aucune tâche.</div>`:`<table><thead><tr><th style="width:22px;">✓</th><th>Tâche</th><th style="width:70px;">Fréq.</th>${showNote?`<th style="width:32%;">Consigne</th>`:""}</tr></thead><tbody>${filteredTasks.map((t,i)=>`<tr class="${i%2===0?'even':'odd'}"><td style="text-align:center;"><span class="chk" style="border-color:${t._done?r.color:"#ccc"};background:${t._done?r.color:"#fff"};">${t._done?"✓":""}</span></td><td style="color:${t._done?"#999":"#1a1f2e"};text-decoration:${t._done?"line-through":"none"};">${t.label}${buildReportNoteHtml(r.id,t.id,t.freq)}</td><td style="text-align:center;"><span class="fbadge" style="background:${FC[t.freq]}18;color:${FC[t.freq]};">${FL[t.freq]}</span></td>${showNote?`<td class="note-cell">${t.note||""}</td>`:""}</tr>`).join("")}</tbody></table>`}
     </div>`;
   });
   const cd=companyData,gPct=totalTasks?Math.round(totalDone/totalTasks*100):0;
@@ -2721,6 +2910,9 @@ td{padding:4px 7px;vertical-align:top;border-bottom:1px solid #f0f2f5;line-heigh
 .chk{display:inline-block;width:13px;height:13px;border-radius:3px;border:1.5px solid #ccc;text-align:center;line-height:11px;color:#fff;font-size:9px;font-weight:700;}
 .fbadge{font-size:8.5px;padding:1px 5px;border-radius:5px;font-weight:700;white-space:nowrap;}
 .note-cell{color:#888;font-style:italic;font-size:9.5px;}
+.report-comment{margin-top:4px;font-size:9.5px;font-style:italic;color:#6c4a85;background:#f7f1fb;border-radius:4px;padding:3px 6px;line-height:1.3;}
+.report-attach{margin-top:4px;display:flex;align-items:center;gap:6px;font-size:9px;color:#555;}
+.report-attach img{max-width:60px;max-height:45px;border-radius:4px;border:1px solid #e0e4ea;}
 .footer{margin-top:16px;padding-top:8px;border-top:1px solid #e2e6ed;text-align:center;font-size:8.5px;color:#bbb;}
 </style></head><body>
 <div class="header">
@@ -3016,13 +3208,14 @@ function confirmReset(){
   if(!isDirecteur()){showToast('Accès réservé au Directeur','#e74c3c');return;}
   if(!confirm('⚠️ Réinitialiser TOUTES les données de suivi ?\n\nLes utilisateurs et paramètres sont conservés.'))return;
   if(!confirm('Confirmer la réinitialisation ?'))return;
-  completions={};customTasks={};completionLog=[];taskOverrides={};
+  completions={};customTasks={};completionLog=[];taskOverrides={};taskNotes={};
   // Effacer localStorage
   Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&!['hm_users','hm_company','hm_sb_cfg'].includes(k))localStorage.removeItem(k);});
   // Effacer Supabase si connecté
   if(_sbClient && _fbConnected){
     _sb.set('hm_app_data','hm_custom_tasks',{}).catch(()=>{});
     _sb.set('hm_app_data','hm_task_overrides',{}).catch(()=>{});
+    _sb.set('hm_app_data','hm_task_notes',{}).catch(()=>{});
     // Effacer toutes les completions (écrire un objet vide pour chaque user)
     _sb.getAll('hm_completions').then(rows=>{
       if(rows) rows.forEach(r=>{ _sb.set('hm_completions', r.user_id||r.key, {}).catch(()=>{}); });
@@ -3173,12 +3366,14 @@ async function initSupabase(cfg){
       _sb.get('hm_app_data','hm_task_overrides').catch(()=>null),
       _sb.get('hm_app_data','hm_company').catch(()=>null),
       _sb.get('hm_app_data','hm_rayons').catch(()=>null),
-    ]).then(([cr,ct,ov,cd,ry])=>{
+      _sb.get('hm_app_data','hm_task_notes').catch(()=>null),
+    ]).then(([cr,ct,ov,cd,ry,tn])=>{
       if(cr && Array.isArray(cr) && cr.length>0){ customRoles=cr; localStorage.setItem('hm_custom_roles',JSON.stringify(cr)); renderCustomRolesList(); }
       if(ct && typeof ct==='object'){ customTasks=ct; localStorage.setItem('hm_cust',JSON.stringify(ct)); }
       if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(ov)); }
       if(cd && typeof cd==='object'){ Object.assign(companyData,cd); localStorage.setItem('hm_company',JSON.stringify(companyData)); updateHeaderCompany(); }
       if(ry && typeof ry==='object' && Object.keys(ry).length>0){ customRayons=ry; localStorage.setItem('hm_rayons',JSON.stringify(ry)); renderRayonsList(); renderSelectRayon(); }
+      if(tn && typeof tn==='object'){ taskNotes=tn; localStorage.setItem('hm_task_notes',JSON.stringify(tn)); renderTasks(); }
     }).catch(()=>{});
 
     // ── Completions : admin fusionne tout, user charge les siennes ──
@@ -3301,6 +3496,14 @@ async function initSupabase(cfg){
           taskOverrides=fresh;
           localStorage.setItem('hm_overrides',JSON.stringify(fresh));
           renderTasks();
+        }
+      }
+      else if(key==='hm_task_notes'){
+        if(fresh && typeof fresh==='object'){
+          taskNotes=fresh;
+          localStorage.setItem('hm_task_notes',JSON.stringify(fresh));
+          renderTasks();
+          if(isDirecteur()) showToast('💬 Commentaire / pièce jointe mis à jour','#8e44ad');
         }
       }
       else if(key==='hm_company'){
@@ -3708,7 +3911,7 @@ function stopLivePolling(){
 
 // ── Polling de secours Supabase (fallback si Realtime WebSocket défaillant) ──
 let _sbPollInterval=null;
-let _sbPollUsers=null, _sbPollCustomTasks=null, _sbPollCustomRoles=null;
+let _sbPollUsers=null, _sbPollCustomTasks=null, _sbPollCustomRoles=null, _sbPollTaskNotes=null;
 function startSupabasePoll(){
   if(!_sbClient||!_fbConnected) return;
   if(_sbPollInterval) clearInterval(_sbPollInterval);
@@ -3746,6 +3949,17 @@ function startSupabasePoll(){
           localStorage.setItem('hm_cust', JSON.stringify(ct));
           renderTasks(); renderProgressBar();
           if(!isDirecteur()) showToast('📋 Tâches mises à jour','#2980b9');
+        }
+      }
+      // Vérifier hm_task_notes (commentaires + pièces jointes)
+      const tn = await _sb.get('hm_app_data','hm_task_notes').catch(()=>null);
+      if(tn && typeof tn==='object'){
+        const newHash = JSON.stringify(tn);
+        if(newHash !== _sbPollTaskNotes){
+          _sbPollTaskNotes = newHash;
+          taskNotes = tn;
+          localStorage.setItem('hm_task_notes', JSON.stringify(tn));
+          renderTasks();
         }
       }
       // Vérifier hm_custom_roles
