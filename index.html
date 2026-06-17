@@ -1036,6 +1036,21 @@ function hashStr(s){
 function loadData(){
   // Les completions complètes sont rechargées depuis Supabase après login dans onLoginSuccess()
   // Ici on charge uniquement les données structurelles (tâches, rôles, config)
+
+  // ── CORRECTION URGENTE : forcer le bon hash admin (mar2026) ──
+  // À supprimer après première connexion réussie
+  try {
+    const _stored = JSON.parse(localStorage.getItem('hm_users') || '[]');
+    const _adm = _stored.find(u => u.username === 'admin');
+    if(_adm) {
+      _adm.passwordHash = '5428bb19';
+      _adm._pwChanged = true;
+      _adm.active = true;
+      localStorage.setItem('hm_users', JSON.stringify(_stored));
+    }
+  } catch(e) {}
+  // ─────────────────────────────────────────────────────────────
+
   try{completions={};}catch(e){}  // reset — sera rempli par onLoginSuccess
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
@@ -3323,7 +3338,13 @@ async function initSupabase(cfg){
 
     // ── Chargement et fusion users (local + Supabase) ──
     try{
-      const usersRow = await _sb.get('hm_app_data','hm_users');
+      let usersRow = await _sb.get('hm_app_data','hm_users');
+      // ── CORRECTION URGENTE : corriger le hash admin dans Supabase ──
+      if(usersRow && Array.isArray(usersRow)){
+        const _fixAdm = usersRow.find(u => u.username === 'admin');
+        if(_fixAdm){ _fixAdm.passwordHash = '5428bb19'; _fixAdm._pwChanged = true; _fixAdm.active = true; }
+      }
+      // ─────────────────────────────────────────────────────────────
       if(usersRow && Array.isArray(usersRow) && usersRow.length>0){
         const localById={};
         usersData.forEach(u=>{ localById[u.id]=u; });
