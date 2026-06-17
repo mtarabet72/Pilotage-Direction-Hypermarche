@@ -413,7 +413,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 <div id="login-overlay">
   <div class="login-box">
     <div class="login-logo">
-      <span id="login-logo-emoji" class="login-logo-emoji" onclick="_onLogoTap()" style="cursor:pointer;user-select:none;">🏬</span>
+      <span id="login-logo-emoji" class="login-logo-emoji">🏬</span>
       <img id="login-logo-img" class="login-logo-img" src="" alt="" style="display:none;margin:0 auto 10px;">
       <div class="login-company" id="login-company-name">PILOTAGE HYPERMARCHÉ</div>
       <div class="login-subtitle">Système de gestion des tâches</div>
@@ -1036,21 +1036,6 @@ function hashStr(s){
 function loadData(){
   // Les completions complètes sont rechargées depuis Supabase après login dans onLoginSuccess()
   // Ici on charge uniquement les données structurelles (tâches, rôles, config)
-
-  // ── CORRECTION URGENTE : forcer le bon hash admin (mar2026) ──
-  // À supprimer après première connexion réussie
-  try {
-    const _stored = JSON.parse(localStorage.getItem('hm_users') || '[]');
-    const _adm = _stored.find(u => u.username === 'admin');
-    if(_adm) {
-      _adm.passwordHash = '5428bb19';
-      _adm._pwChanged = true;
-      _adm.active = true;
-      localStorage.setItem('hm_users', JSON.stringify(_stored));
-    }
-  } catch(e) {}
-  // ─────────────────────────────────────────────────────────────
-
   try{completions={};}catch(e){}  // reset — sera rempli par onLoginSuccess
   try{customTasks=JSON.parse(localStorage.getItem("hm_cust")||"{}");}catch(e){}
   try{completionLog=JSON.parse(localStorage.getItem("hm_log")||"[]");}catch(e){}
@@ -1068,15 +1053,14 @@ function loadData(){
     if(usersData.length===0){usersData=[adminDef];}else{usersData.unshift(adminDef);}
     try{saveUsers();}catch(e){}
   } else {
-    // Toujours s'assurer que le compte admin est actif et a le bon rôle
-    existingAdmin.active = true;
-    existingAdmin.systemRole = existingAdmin.systemRole || 'directeur';
-    existingAdmin.evaluableRoleIds = existingAdmin.evaluableRoleIds || getAllRoles().map(r=>r.id);
-    // NE JAMAIS écraser le mot de passe — si hash différent de '1234', l'admin l'a personnalisé
-    if(existingAdmin.passwordHash !== hashStr('1234')){
-      existingAdmin._pwChanged = true; // marquer pour éviter tout écrasement futur
+    // Migration : si le hash stocké ne correspond pas au hash actuel de '1234', c'est un ancien sel — on recrée le compte admin proprement
+    if(existingAdmin.passwordHash !== hashStr('1234') && existingAdmin._pwChanged !== true){
+      existingAdmin.passwordHash = hashStr('1234');
+      existingAdmin.active = true;
+      existingAdmin.systemRole = existingAdmin.systemRole || 'directeur';
+      existingAdmin.evaluableRoleIds = existingAdmin.evaluableRoleIds || getAllRoles().map(r=>r.id);
+      try{saveUsers();}catch(e){}
     }
-    try{saveUsers();}catch(e){}
   }
 }
 function saveData(){
@@ -3338,13 +3322,7 @@ async function initSupabase(cfg){
 
     // ── Chargement et fusion users (local + Supabase) ──
     try{
-      let usersRow = await _sb.get('hm_app_data','hm_users');
-      // ── CORRECTION URGENTE : corriger le hash admin dans Supabase ──
-      if(usersRow && Array.isArray(usersRow)){
-        const _fixAdm = usersRow.find(u => u.username === 'admin');
-        if(_fixAdm){ _fixAdm.passwordHash = '5428bb19'; _fixAdm._pwChanged = true; _fixAdm.active = true; }
-      }
-      // ─────────────────────────────────────────────────────────────
+      const usersRow = await _sb.get('hm_app_data','hm_users');
       if(usersRow && Array.isArray(usersRow) && usersRow.length>0){
         const localById={};
         usersData.forEach(u=>{ localById[u.id]=u; });
@@ -4420,47 +4398,6 @@ function getAllCommentsForTask(roleId, taskId, freq){
   return Object.values(taskComments).filter(e =>
     e.roleId===roleId && e.taskId===taskId && e.period===period
   ).sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
-}
-
-
-// ════════════════════════════════════════════════════════════════
-// RÉCUPÉRATION D'URGENCE — activée par 7 taps sur le logo login
-// Invisible pour les utilisateurs normaux
-// ════════════════════════════════════════════════════════════════
-let _emergencyTapCount = 0, _emergencyTapTimer = null;
-
-function _onLogoTap(){
-  _emergencyTapCount++;
-  clearTimeout(_emergencyTapTimer);
-  _emergencyTapTimer = setTimeout(()=>{ _emergencyTapCount=0; }, 2000);
-  if(_emergencyTapCount >= 7){
-    _emergencyTapCount = 0;
-    emergencyResetAdmin();
-  }
-}
-
-function emergencyResetAdmin(){
-  if(!confirm('🔑 Récupération admin\n\nRéinitialiser le mot de passe admin à "1234" ?')) return;
-  const newHash = hashStr('1234');
-  let adminUser = usersData.find(u => u.username === 'admin');
-  if(!adminUser){
-    adminUser = {id:'u_admin',name:'Directeur',username:'admin',passwordHash:newHash,systemRole:'directeur',ownRoleId:null,evaluableRoleIds:[],active:true,_pwChanged:false,createdAt:new Date().toISOString()};
-    usersData.unshift(adminUser);
-  } else {
-    adminUser.passwordHash = newHash;
-    adminUser.active = true;
-    adminUser.systemRole = 'directeur';
-    adminUser._pwChanged = false;
-  }
-  try { localStorage.setItem('hm_users', JSON.stringify(usersData)); } catch(e){}
-  if(_sbClient && _fbConnected){
-    _sb.set('hm_app_data','hm_users',usersData).catch(()=>{});
-  }
-  const unField = document.getElementById('login-username');
-  const pwField = document.getElementById('login-password');
-  if(unField) unField.value = 'admin';
-  if(pwField) pwField.value = '1234';
-  alert('✅ Mot de passe réinitialisé !\n\nConnectez-vous avec :\n• Utilisateur : admin\n• Mot de passe : 1234\n\nChangez-le ensuite dans Paramètres.');
 }
 
 </script>
