@@ -413,7 +413,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 <div id="login-overlay">
   <div class="login-box">
     <div class="login-logo">
-      <span id="login-logo-emoji" class="login-logo-emoji">🏬</span>
+      <span id="login-logo-emoji" class="login-logo-emoji" onclick="_onLogoTap()" style="cursor:pointer;user-select:none;">🏬</span>
       <img id="login-logo-img" class="login-logo-img" src="" alt="" style="display:none;margin:0 auto 10px;">
       <div class="login-company" id="login-company-name">PILOTAGE HYPERMARCHÉ</div>
       <div class="login-subtitle">Système de gestion des tâches</div>
@@ -4399,6 +4399,47 @@ function getAllCommentsForTask(roleId, taskId, freq){
   return Object.values(taskComments).filter(e =>
     e.roleId===roleId && e.taskId===taskId && e.period===period
   ).sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// RÉCUPÉRATION D'URGENCE — activée par 7 taps sur le logo login
+// Invisible pour les utilisateurs normaux
+// ════════════════════════════════════════════════════════════════
+let _emergencyTapCount = 0, _emergencyTapTimer = null;
+
+function _onLogoTap(){
+  _emergencyTapCount++;
+  clearTimeout(_emergencyTapTimer);
+  _emergencyTapTimer = setTimeout(()=>{ _emergencyTapCount=0; }, 2000);
+  if(_emergencyTapCount >= 7){
+    _emergencyTapCount = 0;
+    emergencyResetAdmin();
+  }
+}
+
+function emergencyResetAdmin(){
+  if(!confirm('🔑 Récupération admin\n\nRéinitialiser le mot de passe admin à "1234" ?')) return;
+  const newHash = hashStr('1234');
+  let adminUser = usersData.find(u => u.username === 'admin');
+  if(!adminUser){
+    adminUser = {id:'u_admin',name:'Directeur',username:'admin',passwordHash:newHash,systemRole:'directeur',ownRoleId:null,evaluableRoleIds:[],active:true,_pwChanged:false,createdAt:new Date().toISOString()};
+    usersData.unshift(adminUser);
+  } else {
+    adminUser.passwordHash = newHash;
+    adminUser.active = true;
+    adminUser.systemRole = 'directeur';
+    adminUser._pwChanged = false;
+  }
+  try { localStorage.setItem('hm_users', JSON.stringify(usersData)); } catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_users',usersData).catch(()=>{});
+  }
+  const unField = document.getElementById('login-username');
+  const pwField = document.getElementById('login-password');
+  if(unField) unField.value = 'admin';
+  if(pwField) pwField.value = '1234';
+  alert('✅ Mot de passe réinitialisé !\n\nConnectez-vous avec :\n• Utilisateur : admin\n• Mot de passe : 1234\n\nChangez-le ensuite dans Paramètres.');
 }
 
 </script>
