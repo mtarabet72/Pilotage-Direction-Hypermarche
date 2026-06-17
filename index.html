@@ -373,6 +373,38 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 
 /* ══════════════════════════ PRINT ══════════════════════════ */
 @media print{body *{visibility:hidden!important;}#print-area,#print-area *{visibility:visible!important;}#print-area{position:fixed;top:0;left:0;width:100%;}}
+
+/* ── Commentaires & Pièces jointes tâches ────────────────────── */
+.task-comment-btn{background:none;border:none;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:6px;transition:background .15s;flex-shrink:0;}
+.task-comment-btn:hover{background:#f0f4ff;}
+.task-comment-btn.has-data{color:#1565C0;}
+.comment-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .22s;}
+.comment-modal-overlay.open{opacity:1;pointer-events:all;}
+.comment-modal-box{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;padding:22px 18px 30px;transform:translateY(30px);transition:transform .22s;max-height:90vh;overflow-y:auto;}
+.comment-modal-overlay.open .comment-modal-box{transform:translateY(0);}
+.comment-modal-title{font-size:15px;font-weight:700;color:#1a237e;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.comment-textarea{width:100%;min-height:100px;border:1.5px solid #d0d8e8;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;transition:border-color .15s;}
+.comment-textarea:focus{outline:none;border-color:#1565C0;}
+.comment-word-count{font-size:11px;color:#78909c;text-align:right;margin-top:3px;}
+.comment-word-count.over{color:#e74c3c;font-weight:700;}
+.attach-zone{border:2px dashed #c5cfe8;border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:border-color .15s;margin-top:10px;background:#fafbff;}
+.attach-zone:hover{border-color:#1565C0;background:#f0f4ff;}
+.attach-zone input[type=file]{display:none;}
+.attach-preview{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.attach-preview img{max-height:80px;border-radius:8px;border:1px solid #d0d8e8;object-fit:cover;}
+.attach-preview .attach-name{font-size:12px;color:#37474f;background:#f0f4ff;padding:4px 10px;border-radius:6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.attach-remove{background:none;border:none;cursor:pointer;color:#e74c3c;font-size:16px;padding:2px;}
+.comment-actions{display:flex;gap:10px;margin-top:14px;}
+.comment-save-btn{flex:1;background:#1565C0;color:#fff;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;}
+.comment-save-btn:hover{background:#0d47a1;}
+.comment-cancel-btn{background:#f0f4ff;color:#1565C0;border:none;border-radius:10px;padding:11px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+.comment-view-box{background:#f8faff;border-radius:10px;padding:12px;border:1px solid #d0d8e8;margin-bottom:10px;}
+.comment-view-text{font-size:13px;color:#37474f;line-height:1.6;white-space:pre-wrap;}
+.comment-view-meta{font-size:11px;color:#78909c;margin-top:6px;}
+.comment-view-attach{margin-top:8px;}
+.comment-view-attach img{max-width:100%;border-radius:8px;border:1px solid #d0d8e8;}
+.comment-view-attach a{font-size:12px;color:#1565C0;text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0f4ff;border-radius:6px;}
+
 </style>
 </head>
 <body>
@@ -546,8 +578,12 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <!-- Quotidien : matin/soir -->
       <div id="af-periode-q" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#fef9f0;padding:8px 12px;border-radius:8px;border:1px solid #fde8c0;">
         <span style="font-size:11px;font-weight:700;color:#e67e22;">🕐 Deadline :</span>
-        <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="q-moment" value="MATIN" checked> <span>🌅 Matin <b style="color:#e74c3c">(avant 12h00)</b></span></label>
-        <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="q-moment" value="SOIR"> <span>🌙 Soir <b style="color:#8e44ad">(avant 22h00)</b></span></label>
+        <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="q-moment" value="MATIN" checked onchange="onMomentChange('q')"> <span>🌅 Matin <b style="color:#e74c3c">(avant 12h00)</b></span></label>
+        <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="q-moment" value="SOIR" onchange="onMomentChange('q')"> <span>🌙 Soir <b style="color:#8e44ad">(avant 22h00)</b></span></label>
+        <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" id="q-custom-time-chk" onchange="onMomentChange('q')"> <span style="color:#555;">Heure personnalisée :</span>
+          <input type="time" id="q-custom-time" value="12:00" style="padding:3px 7px;border-radius:6px;border:1.5px solid #fde8c0;font-size:12px;display:none;">
+        </label>
       </div>
       <!-- Hebdomadaire : jours + matin/soir -->
       <div id="af-periode-h" style="margin-top:10px;display:none;flex-direction:column;gap:8px;background:#eaf6fb;padding:10px 12px;border-radius:8px;border:1px solid #aed6f1;">
@@ -565,8 +601,12 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <span style="font-size:11px;font-weight:700;color:#2980b9;">🕐 Deadline :</span>
-          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="h-moment" value="MATIN" checked> 🌅 Matin <b style="color:#e74c3c">(avant 12h)</b></label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="h-moment" value="SOIR"> 🌙 Soir <b style="color:#8e44ad">(avant 22h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="h-moment" value="MATIN" checked onchange="onMomentChange('h')"> 🌅 Matin <b style="color:#e74c3c">(avant 12h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="h-moment" value="SOIR" onchange="onMomentChange('h')"> 🌙 Soir <b style="color:#8e44ad">(avant 22h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+            <input type="checkbox" id="h-custom-time-chk" onchange="onMomentChange('h')"> <span style="color:#555;">Heure perso :</span>
+            <input type="time" id="h-custom-time" value="12:00" style="padding:3px 7px;border-radius:6px;border:1.5px solid #aed6f1;font-size:12px;display:none;">
+          </label>
         </div>
       </div>
       <!-- Mensuel : date + matin/soir -->
@@ -577,8 +617,12 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <span style="font-size:11px;font-weight:700;color:#27ae60;">🕐 Deadline :</span>
-          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="m-moment" value="MATIN" checked> 🌅 Matin <b style="color:#e74c3c">(avant 12h)</b></label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="m-moment" value="SOIR"> 🌙 Soir <b style="color:#8e44ad">(avant 22h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="m-moment" value="MATIN" checked onchange="onMomentChange('m')"> 🌅 Matin <b style="color:#e74c3c">(avant 12h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="m-moment" value="SOIR" onchange="onMomentChange('m')"> 🌙 Soir <b style="color:#8e44ad">(avant 22h)</b></label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+            <input type="checkbox" id="m-custom-time-chk" onchange="onMomentChange('m')"> <span style="color:#555;">Heure perso :</span>
+            <input type="time" id="m-custom-time" value="12:00" style="padding:3px 7px;border-radius:6px;border:1.5px solid #a9dfbf;font-size:12px;display:none;">
+          </label>
         </div>
       </div>
       <div class="af-row" style="margin-top:12px;">
@@ -967,7 +1011,7 @@ const FL={Q:"Quotidien",H:"Hebdomadaire",M:"Mensuel"};
 const ROLE_COLORS={directeur:"#e63950",chef_secteur:"#2980b9",chef_rayon:"#27ae60"};
 const ROLE_LABELS={directeur:"Directeur (Admin)",chef_secteur:"Chef Secteur / Département",chef_rayon:"Chef de Rayon"};
 
-let completions={},customTasks={},completionLog=[],taskOverrides={},customRoles=[];
+let completions={},customTasks={},completionLog=[],taskOverrides={},customRoles=[],taskComments={};
 let companyData={nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""};
 let usersData=[];
 let currentUser=null;
@@ -1000,6 +1044,8 @@ function loadData(){
   try{companyData=Object.assign({nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""},JSON.parse(localStorage.getItem("hm_company")||"{}"));}catch(e){}
   try{usersData=JSON.parse(localStorage.getItem("hm_users")||"[]");}catch(e){usersData=[];}
   try{customRayons=JSON.parse(localStorage.getItem("hm_rayons")||"{}")||{};}catch(e){customRayons={};}  // rayons admin
+  // Charger les commentaires de tâches
+  try{taskComments=JSON.parse(localStorage.getItem('hm_task_comments')||'{}');}catch(e){taskComments={};}
   // Toujours garantir le compte admin même si localStorage est bloqué
   const existingAdmin = usersData.find(u=>u.username==='admin');
   if(!existingAdmin){
@@ -1026,6 +1072,7 @@ function saveData(){
     localStorage.setItem("hm_cust",JSON.stringify(customTasks));
     localStorage.setItem("hm_log",JSON.stringify(completionLog));
     localStorage.setItem("hm_overrides",JSON.stringify(taskOverrides));
+    localStorage.setItem("hm_task_comments",JSON.stringify(taskComments));
   }catch(e){}
   // ── Supabase PRIORITAIRE ──
   if(_sbClient && _fbConnected){
@@ -1036,6 +1083,8 @@ function saveData(){
       _sb.set('hm_app_data','hm_custom_tasks', customTasks).catch(()=>{});
       _sb.set('hm_app_data','hm_task_overrides', taskOverrides).catch(()=>{});
     }
+    // Commentaires : chaque user écrit ses propres commentaires
+    _sb.set('hm_task_comments', uid, taskComments).catch(()=>{});
   } else if(!_sbClient){
     // Pas de Supabase configuré : localStorage uniquement, pas de warning
   }
@@ -1112,7 +1161,9 @@ function openAddDeptModal(editId){
 
   document.getElementById('modal-actions').innerHTML = `
     <button class="modal-cancel" onclick="closeModal()">Annuler</button>
-    <button class="modal-save" onclick="saveDept()">💾 Enregistrer</button>`;
+    <button class="modal-save" id="modal-save-btn" onclick="saveDept()">💾 Enregistrer</button>`;
+  // Synchroniser le callback au cas où openUserModal est appelé ensuite
+  modalSaveCallback=()=>saveDept();
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('modal-box').onclick = e=>e.stopPropagation();
 }
@@ -1189,12 +1240,20 @@ function saveDept(){
 function deleteCustomRole(id){
   if(!confirm('Supprimer ce département ? Les tâches associées seront perdues.')) return;
   customRoles = customRoles.filter(r=>r.id!==id);
-  // Nettoyer toutes les completions et tâches liées à ce rôle
+  // Nettoyer toutes les completions, tâches et commentaires liés à ce rôle
   Object.keys(completions).forEach(k=>{ if(k.includes('__'+id+'__')) delete completions[k]; });
   completionLog=completionLog.filter(e=>e.roleId!==id);
+  Object.keys(taskComments).forEach(k=>{ if(taskComments[k]?.roleId===id) delete taskComments[k]; });
   delete customTasks[id];
   delete taskOverrides[id];
   saveCustomRoles(); saveData();
+  // Nettoyer aussi dans Supabase si connecté
+  if(_sbClient && _fbConnected){
+    try{
+      _sb.set('hm_app_data','hm_completions_'+id, null).catch(()=>{});
+      _sb.set('hm_app_data','hm_log_'+id, null).catch(()=>{});
+    }catch(e){}
+  }
   renderCustomRolesList();
   renderDashboard(); renderSidebar();
   showToast('🗑️ Département supprimé','#e74c3c');
@@ -1275,8 +1334,14 @@ function onLoginSuccess(){
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
         _sb.get('hm_app_data','hm_custom_roles'),
-        _sb.get('hm_app_data','hm_rayons')
-      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons])=>{
+        _sb.get('hm_app_data','hm_rayons'),
+        _sb.getAll('hm_task_comments')
+      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons,cmtRows])=>{
+        // Fusionner tous les commentaires de tous les users pour l'admin
+        if(cmtRows && Array.isArray(cmtRows)){
+          // _sb.getAll retourne [{key:'uid', data:{...}}, ...] — extraire .data
+          cmtRows.forEach(row=>{ if(row?.data && typeof row.data==='object') Object.assign(taskComments, row.data); });
+        }
         const evts={}; (evtsResult.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
         // Users : source de vérité Supabase
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
@@ -1324,8 +1389,11 @@ function onLoginSuccess(){
         _sb.get('hm_completions', uid),
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
-        _sb.get('hm_app_data','hm_custom_roles')
-      ]).then(([sbUsers,myComp, ct, ov, cr])=>{
+        _sb.get('hm_app_data','hm_custom_roles'),
+        _sb.get('hm_task_comments', uid)
+      ]).then(([sbUsers,myComp, ct, ov, cr, cmts])=>{
+        // Fusionner commentaires Supabase (priorité Supabase)
+        if(cmts && typeof cmts==='object') taskComments=Object.assign({},taskComments,cmts);
         // Mettre à jour la liste users (pour les noms dans les tâches assignées)
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
           const localById={};
@@ -1497,7 +1565,8 @@ function getRoleStats(rid,freq="ALL"){
   return{done,total:tasks.length,pct:tasks.length?Math.round(done/tasks.length*100):0};
 }
 function getSecteurStats(secteur,freq="ALL"){
-  const roles=getAllRoles().filter(r=>r.secteur===secteur);
+  // Filtrer uniquement les rôles du secteur qui ont des tâches (évite de fausser les %)
+  const roles=getAllRoles().filter(r=>r.secteur===secteur&&getAllTasks(r.id).length>0);
   let done=0,total=0;
   roles.forEach(r=>{const s=getRoleStats(r.id,freq);done+=s.done;total+=s.total;});
   return{done,total,pct:total?Math.round(done/total*100):0};
@@ -1577,7 +1646,7 @@ function renderDashboard(){
       <div class="sum-card" style="border-top-color:#e63950"><div class="sc-val" style="color:#e63950">${g.pct}%</div><div class="sc-label">Mon avancement</div><div class="sc-sub" style="color:#e63950">${g.done}/${g.total} tâches</div></div>
       <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${visibleRoles.length}</div></div>
       <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${g.total-g.done}</div><div class="sc-label">Tâches restantes</div><div class="sc-sub" style="color:#2980b9">${dashPeriod==="Q"?"Aujourd'hui":dashPeriod==="H"?"Cette semaine":"Ce mois"}</div></div>
-      <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeVisRoles.length}</div></div>`;
+      ;
 
     // Cards uniquement des rôles accessibles
     let html="";
@@ -1602,7 +1671,7 @@ function renderDashboard(){
             const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
             let hBadge='';
             if(t.deadline){
-              const lH=t.deadline==='12:00'?'🌅':'🌙';
+              const lH=getTaskMomentLabel(t, true);
               if(done&&logEntry){
                 const dA=new Date(logEntry.completedAt);
                 const dS=dA.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -1662,7 +1731,7 @@ function renderDashboard(){
         const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
         let horaireBadge='';
         if(t.deadline){
-          const labelH=t.deadline==='12:00'?'🌅':'🌙';
+          const labelH=getTaskMomentLabel(t, true);
           if(done&&logEntry){
             const doneAt=new Date(logEntry.completedAt);
             const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -1792,7 +1861,7 @@ function renderTasks(){
     if(t.deadline){
       const [dh,dm]=t.deadline.split(':').map(Number);
       const deadlineMin=dh*60+dm;
-      const labelHoraire=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+      const labelHoraire=getTaskMomentLabel(t);
       if(done && completionEntry){
         const doneAt=new Date(completionEntry.completedAt);
         const doneMin=doneAt.getHours()*60+doneAt.getMinutes();
@@ -1809,6 +1878,12 @@ function renderTasks(){
         deadlineIndicator=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;background:${statusBg};color:${statusColor};border:1px solid ${enRetard?'#f5b7b1':'#fde8c0'}">${statusIcon} ${labelHoraire} · avant ${t.deadline}${isAdmin&&who?' · '+who:''}</span>`;
       }
     }
+    // ── Commentaire badge ──
+    const cmtUid = currentUser?.id||'guest';
+    const hasCmt = !!(taskComments[cmtKey(cmtUid,currentRoleId,t.id,t.freq)]?.text || taskComments[cmtKey(cmtUid,currentRoleId,t.id,t.freq)]?.attachData);
+    const cmtCount = getTaskCommentCount(currentRoleId,t.id,t.freq);
+    const cmtBtnTitle = hasCmt?'Voir/modifier commentaire':'Ajouter un commentaire';
+    const cmtBadge = cmtCount>0?`<sup style="font-size:9px;background:#e63950;color:#fff;border-radius:6px;padding:1px 4px;margin-left:1px;">${cmtCount}</sup>`:'';
     const clickHandler=(canEdit&&!isAdmin)?`toggleTask('${t.id}','${t.freq}')`:"";
     const itemStyle=done?`background:${r.light};border-color:${r.color}22`:"";
     const checkStyle=done?`background:${r.color};border-color:${r.color}`:"";
@@ -1823,6 +1898,7 @@ function renderTasks(){
         ${t.note?`<div class="task-note">${t.note}</div>`:""}
         ${deadlineIndicator?`<div style="margin-top:5px;">${deadlineIndicator}</div>`:""}
       </div>
+      <button class="task-comment-btn ${hasCmt?'has-data':''}" onclick="event.stopPropagation();openCommentModal('${currentRoleId}','${t.id}','${t.freq}','${(t.label||\'\').replace(/\'/g,\'&#39;\')}')" title="${cmtBtnTitle}">💬${cmtBadge}</button>
       ${isCust&&isAdmin?`<button class="task-edit-btn" onclick="event.stopPropagation();editCustomTask('${t.id}')" title="Modifier">✏️</button><button class="task-del" onclick="event.stopPropagation();delCustom('${t.id}')" title="Supprimer">✕</button>`:""}
     </div>`;
   }).join("");
@@ -1851,7 +1927,7 @@ function toggleTask(tid,freq){
     const alreadyDone=!!completions[ck(currentRoleId,tid,freq)];
     // Bloquer seulement si on essaie de cocher (pas de décocher) et hors horaire
     if(!alreadyDone && hNow>deadlineMin){
-      const periode=taskForCheck.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+      const periode=getTaskMomentLabel(taskForCheck);
       showToast(`⛔ Hors délai — ${periode} : validation avant ${taskForCheck.deadline} uniquement`,'#e74c3c');
       return;
     }
@@ -1906,6 +1982,36 @@ function updatePeriodeFields(){
   document.getElementById("af-periode-h").style.display=freq==="H"?"flex":"none";
   document.getElementById("af-periode-m").style.display=freq==="M"?"flex":"none";
 }
+// ── Gestion heure personnalisée dans le formulaire ──
+function onMomentChange(freq){
+  const chk=document.getElementById(freq+'-custom-time-chk');
+  const inp=document.getElementById(freq+'-custom-time');
+  if(!chk||!inp)return;
+  inp.style.display=chk.checked?'inline-block':'none';
+  if(chk.checked){
+    // Préremplir avec la valeur du radio sélectionné
+    const moment=document.querySelector('input[name="'+freq+'-moment"]:checked')?.value||'MATIN';
+    inp.value=moment==='MATIN'?'09:00':'21:00';
+  }
+}
+// ── Helper : détermine le label horaire d'une tâche (MATIN/SOIR/CUSTOM) ──
+function getTaskMomentLabel(t, short=false) {
+  // Priorité : champ moment explicite (MATIN/SOIR/CUSTOM)
+  const m = t.moment || (t.deadline === '12:00' ? 'MATIN' : t.deadline ? 'SOIR' : null);
+  if(!m) return '';
+  if(m === 'MATIN') return short ? '🌅 M' : '🌅 Matin';
+  if(m === 'SOIR')  return short ? '🌙 S' : '🌙 Soir';
+  return short ? '⏰ C' : '⏰ Personnalisé';
+}
+function getDeadlineFromForm(freq){
+  const chk=document.getElementById(freq+'-custom-time-chk');
+  const inp=document.getElementById(freq+'-custom-time');
+  if(chk&&chk.checked&&inp&&inp.value){
+    return inp.value; // ex: "09:30"
+  }
+  const moment=document.querySelector('input[name="'+freq+'-moment"]:checked')?.value||'MATIN';
+  return moment==='MATIN'?'12:00':'22:00';
+}
 function saveCustomTask(){
   if(!isDirecteur()){showToast('Accès réservé au Directeur','#e74c3c');return;}
   const label=document.getElementById("nt-input").value.trim();if(!label)return;
@@ -1915,23 +2021,31 @@ function saveCustomTask(){
   let periodeNote="",deadline="",jours=[],datesMois=[];
 
   if(freq==="Q"){
+    deadline=getDeadlineFromForm("q");
     const moment=document.querySelector('input[name="q-moment"]:checked')?.value||"MATIN";
-    deadline=moment==="MATIN"?"12:00":moment==="SOIR"?"22:00":"22:00";
-    periodeNote="⏰ "+moment+" (avant "+(moment==="MATIN"?"12h":"22h")+")";
+    const isCustom=document.getElementById('q-custom-time-chk')?.checked;
+    periodeNote="⏰ "+(isCustom?"Personnalisé":moment)+" (avant "+deadline+")";
   } else if(freq==="H"){
     jours=[...document.querySelectorAll(".jour-chk:checked")].map(c=>c.value);
+    deadline=getDeadlineFromForm("h");
     const moment=document.querySelector('input[name="h-moment"]:checked')?.value||"MATIN";
-    deadline=moment==="MATIN"?"12:00":"22:00";
-    periodeNote=`📅 ${jours.length?jours.join(", "):"Tous les jours"} — ${moment} avant ${moment==="MATIN"?"12h":"22h"}`;
+    const isCustom=document.getElementById('h-custom-time-chk')?.checked;
+    periodeNote=`📅 ${jours.length?jours.join(", "):"Tous les jours"} — avant ${deadline}${isCustom?' (personnalisé)':''}`;
   } else if(freq==="M"){
     const datePrec=document.getElementById("nt-m-date").value.trim();
+    deadline=getDeadlineFromForm("m");
     const moment=document.querySelector('input[name="m-moment"]:checked')?.value||"MATIN";
-    deadline=moment==="MATIN"?"12:00":"22:00";
-    periodeNote=`🗓️ ${datePrec||"À définir"} — ${moment} avant ${moment==="MATIN"?"12h":"22h"}`;
+    const isCustom=document.getElementById('m-custom-time-chk')?.checked;
+    periodeNote=`🗓️ ${datePrec||"À définir"} — avant ${deadline}${isCustom?' (personnalisé)':''}`;
     datesMois=datePrec?datePrec.split(",").map(d=>d.trim()):[];
   }
 
-  const task={id,label,freq,note:periodeNote,deadline,jours,datesMois,assignedTo,createdBy:currentUser.id,createdAt:new Date().toISOString()};
+  // Stocker le moment (MATIN/SOIR/CUSTOM) pour le badge horaire
+  let momentVal='MATIN';
+  if(freq==='Q') momentVal=document.getElementById('q-custom-time-chk')?.checked?'CUSTOM':(document.querySelector('input[name="q-moment"]:checked')?.value||'MATIN');
+  else if(freq==='H') momentVal=document.getElementById('h-custom-time-chk')?.checked?'CUSTOM':(document.querySelector('input[name="h-moment"]:checked')?.value||'MATIN');
+  else if(freq==='M') momentVal=document.getElementById('m-custom-time-chk')?.checked?'CUSTOM':(document.querySelector('input[name="m-moment"]:checked')?.value||'MATIN');
+  const task={id,label,freq,note:periodeNote,deadline,moment:momentVal,jours,datesMois,assignedTo,createdBy:currentUser.id,createdAt:new Date().toISOString()};
   if(!customTasks[currentRoleId])customTasks[currentRoleId]=[];
   customTasks[currentRoleId].push(task);
   saveData();broadcastUpdate();closeAddForm();renderTasks();renderProgressBar();
@@ -1941,9 +2055,11 @@ function saveCustomTask(){
 function delCustom(id){
   if(!confirm("Supprimer cette tâche ?"))return;
   if(customTasks[currentRoleId])customTasks[currentRoleId]=customTasks[currentRoleId].filter(t=>t.id!==id);
-  // Nettoyer toutes les completions liées à cette tâche pour tous les periods et users
+  // Nettoyer completions et commentaires liés à cette tâche
   Object.keys(completions).forEach(k=>{ if(k.includes('__'+currentRoleId+'__'+id+'__')) delete completions[k]; });
   completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===id));
+  Object.keys(taskComments).forEach(k=>{ if(taskComments[k]?.taskId===id&&taskComments[k]?.roleId===currentRoleId) delete taskComments[k]; });
+  saveTaskComments();
   saveData();broadcastUpdate();renderTasks();renderProgressBar();renderDashboard();
 }
 function editCustomTask(id){
@@ -2023,7 +2139,17 @@ function peuplerSelectRayon(){ renderSelectRayon(); }
 function changerRayon(){const k=document.getElementById('selectRayon').value;if(k){localStorage.setItem('hm_rayon_actif',k);afficherRayon(k);}}
 function getResponsableNom(rayon,type){if(type==='chef')return rayon.equipe.chef;if(type==='superviseur')return rayon.equipe.superviseur;return 'Équipe employés';}
 function afficherRayon(key){
-  const rayon=CONFIG_RAYONS[key];if(!rayon)return;rayonActif=key;
+  const rayon=CONFIG_RAYONS[key];if(!rayon)return;
+  // Guard : vérifier que le user a accès à ce rayon
+  if(!isDirecteur() && currentUser?.ownRoleId){
+    const deptKeys=getDeptKeyForRole(currentUser.ownRoleId);
+    if(deptKeys!==null){
+      const dept=(rayon.departement||'').toUpperCase();
+      const hasAccess=deptKeys.some(d=>dept===d.toUpperCase()||dept.includes(d.toUpperCase())||d.toUpperCase().includes(dept));
+      if(!hasAccess){showToast('⛔ Accès non autorisé à ce rayon','#e74c3c');return;}
+    }
+  }
+  rayonActif=key;
   const rh=document.getElementById('role-header');rh.style.borderColor='#2980b928';
   rh.innerHTML=`<div class="rh-icon">📦</div>
     <div class="rh-body"><h2 style="color:#2980b9">${rayon.nom} <span style="font-size:12px;color:var(--muted);font-weight:500;">(N°${rayon.numero})</span></h2>
@@ -2064,25 +2190,54 @@ function renderProgressBarRayon(rayon){
 // GESTION DES RAYONS (CRUD Admin)
 // ══════════════════════════════════════════════════════════════
 
+// ── Mapping ownRoleId → département(s) associés ──
+function getDeptKeyForRole(roleId){
+  const map={
+    'cdp_pgc':['PGC'],
+    'cs_non_food':['BAZAR','TEXTILE','NON FOOD','ELECTROMENAGER'],
+    'cs_frais':['PRODUITS FRAIS','FRAIS'],
+    'cr':null, // Chef Rayon voit tous
+    'sup_com':null,
+    'log':['LOGISTIQUE','SERVICES'],
+    'rh':['RH','SERVICES'],
+    'caisse':['SERVICES','CAISSE'],
+    'secu':['SECURITE','SERVICES'],
+  };
+  // Chercher aussi dans les customRoles
+  const cRole = (customRoles||[]).find(r=>r.id===roleId);
+  if(cRole) return [cRole.label]; // Le label du custom role = son département
+  return map[roleId]||null; // null = voit tout
+}
 function renderSelectRayon(){
   const sel=document.getElementById('selectRayon');
   if(!sel) return;
   sel.innerHTML='<option value="">-- Choisir un rayon --</option>';
-  const keys=Object.keys(customRayons).sort((a,b)=>{
+  const allKeys=Object.keys(customRayons).sort((a,b)=>{
     const na=(customRayons[a].numero||999), nb=(customRayons[b].numero||999);
     return na-nb;
   });
-  keys.forEach(k=>{
+  // Filtrer selon le département du user connecté
+  let visibleKeys=allKeys;
+  if(!isDirecteur() && currentUser?.ownRoleId){
+    const deptKeys=getDeptKeyForRole(currentUser.ownRoleId);
+    if(deptKeys!==null){
+      visibleKeys=allKeys.filter(k=>{
+        const dept=(customRayons[k].departement||'').toUpperCase();
+        return deptKeys.some(d=>dept===d.toUpperCase()||dept.includes(d.toUpperCase())||d.toUpperCase().includes(dept));
+      });
+    }
+  }
+  visibleKeys.forEach(k=>{
     const r=customRayons[k];
     const opt=document.createElement('option');
     opt.value=k;
     opt.textContent=`${r.departement||''} — N°${r.numero||'?'} : ${r.nom}`;
     sel.appendChild(opt);
   });
-  if(!keys.length){
+  if(!visibleKeys.length){
     const opt=document.createElement('option');
     opt.disabled=true;
-    opt.textContent='Aucun rayon — créez-en dans Paramètres';
+    opt.textContent=isDirecteur()?'Aucun rayon — créez-en dans Paramètres':'Aucun rayon pour votre département';
     sel.appendChild(opt);
   }
 }
@@ -2303,6 +2458,12 @@ function closeModal(){
   el.classList.remove('open');
   el.style.display='';
   modalSaveCallback=null;
+  // Restaurer le bouton save avec son id (au cas où openDeptModal l'a remplacé)
+  const actions=document.getElementById('modal-actions');
+  if(actions && !document.getElementById('modal-save-btn')){
+    actions.innerHTML=`<button class="modal-cancel" onclick="closeModal()">Annuler</button>
+    <button class="modal-save" id="modal-save-btn" onclick="modalSaveCallback&&modalSaveCallback()">Enregistrer</button>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2405,7 +2566,14 @@ function openUserModal(userId=null){
     </div>`;
 
   // Set own role value
-  if(existing?.ownRoleId){setTimeout(()=>{const sel=document.getElementById('uf-ownrole');if(sel)sel.value=existing.ownRoleId;},50);}
+  // Pré-sélectionner ownRoleId sans setTimeout fragile
+  if(existing?.ownRoleId){
+    // Attendre que le DOM soit prêt via requestAnimationFrame (plus fiable que setTimeout)
+    requestAnimationFrame(()=>{
+      const sel=document.getElementById('uf-ownrole');
+      if(sel){ sel.value=existing.ownRoleId; }
+    });
+  }
 
   document.getElementById('modal-save-btn').textContent=existing?'Enregistrer':'Créer';
   modalSaveCallback=()=>saveUserFromModal(userId);
@@ -2519,21 +2687,23 @@ function renderResults(){
 function buildDailyResults(dateStr){
   const dayLabel=fmtDate(new Date(dateStr+'T00:00:00'));
   const logs=completionLog.filter(e=>e.freq==='Q'&&e.period===dateStr);
-  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  // N'inclure que les rôles qui ont des tâches Q (évite de fausser le % global)
+  let totalQ=0;getAllRoles().filter(r=>getAllTasks(r.id).some(t=>t.freq==='Q')).forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const doneCount=logs.length,pct=totalQ?Math.round(doneCount/totalQ*100):0;
   const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
   let rolesHtml='';
   getAllRoles().forEach(r=>{
     const rLogs=logs.filter(e=>e.roleId===r.id);
-    const rd=rLogs.length;const totalRQ=getAllTasks(r.id).filter(t=>t.freq==='Q').length;
-    const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
+    const totalRQ=getAllTasks(r.id).filter(t=>t.freq==='Q').length;
+    if(totalRQ===0)return; // Ignorer les rôles sans tâches Q
+    const rd=rLogs.length;const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
     // Détail des tâches avec horaire
     const tasksDetail=getAllTasks(r.id).filter(t=>t.freq==='Q').map(t=>{
       const logE=rLogs.find(e=>e.taskId===t.id);
       const done=!!logE;
       let horaireHtml='';
       if(t.deadline){
-        const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+        const labelH=getTaskMomentLabel(t);
         if(done&&logE){
           const doneAt=new Date(logE.completedAt);
           const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -2542,14 +2712,30 @@ function buildDailyResults(dateStr){
           const who=usersData.find(u=>u.id===logE.userId)?.name||'';
           horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:${onTime?'#eafaf1':'#fdecea'};color:${onTime?'#27ae60':'#e74c3c'}">${onTime?'🟢':'🔴'} ${labelH} · ${doneStr}${who?' · '+who:''}</span>`;
         } else {
-          const labelH2=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+          const labelH2=getTaskMomentLabel(t);
           horaireHtml=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fdecea;color:#e74c3c">⛔ ${labelH2} · avant ${t.deadline}</span>`;
         }
       }
-      return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;">
-        <span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span>
-        <span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>
-        ${horaireHtml}
+      // Commentaires sur cette tâche (tous users, pour le rapport admin)
+      const taskCmts = getAllCommentsForTask(r.id, t.id, 'Q');
+      const cmtHtml = taskCmts.length>0 ? taskCmts.map(c=>{
+        const attachHtml = c.attachData
+          ? (c.attachType?.startsWith('image/')
+              ? `<img src="${c.attachData}" style="max-height:60px;border-radius:6px;margin-top:4px;border:1px solid #d0d8e8;">`
+              : `<a href="${c.attachData}" download="${c.attachName||'fichier'}" style="font-size:10px;color:#1565C0;">📄 ${c.attachName||'Fichier joint'}</a>`)
+          : '';
+        const who = c.userName ? `<span style="color:#78909c;font-size:10px;"> — ${c.userName}</span>` : '';
+        return `<div style="background:#f0f4ff;border-radius:6px;padding:6px 8px;margin-top:4px;font-size:11px;border-left:3px solid #1565C0;">
+          <span style="color:#37474f;">💬 ${c.text||''}</span>${who}${attachHtml?`<div>${attachHtml}</div>`:''}
+        </div>`;
+      }).join('') : '';
+      return `<div style="padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;">
+        <div style="display:flex;align-items:center;">
+          <span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span>
+          <span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>
+          ${horaireHtml}
+        </div>
+        ${cmtHtml}
       </div>`;
     }).join('');
     rolesHtml+=`<div class="res-role-row" style="flex-direction:column;align-items:stretch;">
@@ -2583,7 +2769,7 @@ function buildCumulResults(dateStr){
 function buildWeeklyResults(dateStr){
   const weekStr=weekKeyForDate(dateStr);const weekDates=getWeekDates(dateStr);const today=todayKey();
   const hLogs=completionLog.filter(e=>e.freq==='H'&&e.period===weekStr);
-  let totalH=0;getAllRoles().forEach(r=>{totalH+=getAllTasks(r.id).filter(t=>t.freq==='H').length;});
+  let totalH=0;getAllRoles().filter(r=>getAllTasks(r.id).some(t=>t.freq==='H')).forEach(r=>{totalH+=getAllTasks(r.id).filter(t=>t.freq==='H').length;});
   const doneH=hLogs.length,pctH=totalH?Math.round(doneH/totalH*100):0;
   let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -2612,7 +2798,7 @@ function buildWeeklyResults(dateStr){
           const logE=rHLogs.find(e=>e.taskId===t.id);const done=!!logE;
           let hBadge='';
           if(t.deadline){
-            const labelH=t.deadline==='12:00'?'🌅 Matin':'🌙 Soir';
+            const labelH=getTaskMomentLabel(t);
             if(done&&logE){
               const doneAt=new Date(logE.completedAt);
               const doneStr=doneAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -2624,7 +2810,14 @@ function buildWeeklyResults(dateStr){
               hBadge=`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fdecea;color:#e74c3c">⛔ ${labelH} · avant ${t.deadline}</span>`;
             }
           }
-          return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>${hBadge}</div>`;
+          // Commentaires sur cette tâche H
+          const hCmts=getAllCommentsForTask(r.id,t.id,'H');
+          const hCmtHtml=hCmts.length>0?hCmts.map(c=>{
+            const att=c.attachData?(c.attachType?.startsWith('image/')?`<img src="${c.attachData}" style="max-height:55px;border-radius:6px;margin-top:3px;border:1px solid #d0d8e8;">`:`<a href="${c.attachData}" download="${c.attachName||'fichier'}" style="font-size:10px;color:#1565C0;">📄 ${c.attachName||'Fichier'}</a>`):'';
+            const who=c.userName?` — <span style="color:#78909c">${c.userName}</span>`:'';
+            return `<div style="background:#f0f4ff;border-radius:6px;padding:5px 8px;margin-top:3px;font-size:10px;border-left:3px solid #1565C0;">💬 ${c.text||''}${who}${att?`<div>${att}</div>`:''}</div>`;
+          }).join(''):'';
+          return `<div style="padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><div style="display:flex;align-items:center;"><span style="margin-right:6px;font-size:13px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span>${hBadge}</div>${hCmtHtml}</div>`;
         }).join('');
         hDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${totalR})</span></div>${tasksHtml}</div>`;
       });
@@ -2981,7 +3174,7 @@ function toggleHideTask(roleId,taskId){
   const cur=(taskOverrides[roleId][taskId]||{}).hidden;
   taskOverrides[roleId][taskId]={...(taskOverrides[roleId][taskId]||{}),hidden:!cur};
   // Si on masque la tâche, nettoyer ses completions
-  if(!cur){ Object.keys(completions).forEach(k=>{ if(k.includes('__'+roleId+'__'+taskId+'__')) delete completions[k]; }); completionLog=completionLog.filter(e=>!(e.roleId===roleId&&e.taskId===taskId)); }
+  if(!cur){ Object.keys(completions).forEach(k=>{ if(k.includes('__'+roleId+'__'+taskId+'__')) delete completions[k]; }); completionLog=completionLog.filter(e=>!(e.roleId===roleId&&e.taskId===taskId)); Object.keys(taskComments).forEach(k=>{ if(taskComments[k]?.taskId===taskId&&taskComments[k]?.roleId===roleId) delete taskComments[k]; }); saveTaskComments(); }
   saveData();renderTaskMgmt();showToast(cur?'✅ Tâche affichée':'Tâche masquée',cur?'#27ae60':'#888');
 }
 function exportDataJSON(){
@@ -3576,27 +3769,30 @@ function saveCustomTaskFromLib(){
   // ── Récupérer deadline + jours + datesMois depuis le formulaire ──
   let deadline='', jours=[], datesMois=[], periodeNote='';
   if(freq==='Q'){
+    deadline=getDeadlineFromForm('q');
+    const isCustom=document.getElementById('q-custom-time-chk')?.checked;
     const moment=document.querySelector('input[name="q-moment"]:checked')?.value||'MATIN';
-    deadline=moment==='MATIN'?'12:00':'22:00';
-    periodeNote='⏰ '+moment+' (avant '+(moment==='MATIN'?'12h':'22h')+')';
+    periodeNote='⏰ '+(isCustom?'Personnalisé':moment)+' (avant '+deadline+')';
   } else if(freq==='H'){
     jours=[...document.querySelectorAll('.jour-chk:checked')].map(c=>c.value);
-    const moment=document.querySelector('input[name="h-moment"]:checked')?.value||'MATIN';
-    deadline=moment==='MATIN'?'12:00':'22:00';
-    periodeNote='📅 '+(jours.length?jours.join(', '):'Tous les jours')+' — '+moment+' avant '+(moment==='MATIN'?'12h':'22h');
+    deadline=getDeadlineFromForm('h');
+    const isCustom=document.getElementById('h-custom-time-chk')?.checked;
+    periodeNote='📅 '+(jours.length?jours.join(', '):'Tous les jours')+' — avant '+deadline+(isCustom?' (personnalisé)':'');
   } else if(freq==='M'){
     const datePrec=document.getElementById('nt-m-date')?.value.trim()||'';
-    const moment=document.querySelector('input[name="m-moment"]:checked')?.value||'MATIN';
-    deadline=moment==='MATIN'?'12:00':'22:00';
-    periodeNote='🗓️ '+(datePrec||'À définir')+' — '+moment+' avant '+(moment==='MATIN'?'12h':'22h');
+    deadline=getDeadlineFromForm('m');
+    const isCustom=document.getElementById('m-custom-time-chk')?.checked;
+    periodeNote='🗓️ '+(datePrec||'À définir')+' — avant '+deadline+(isCustom?' (personnalisé)':'');
     datesMois=datePrec?datePrec.split(',').map(d=>d.trim()):[];
   }
+  const momentLib = document.getElementById(freq+'-custom-time-chk')?.checked?'CUSTOM':(document.querySelector('input[name="'+freq+'-moment"]:checked')?.value||'MATIN');
   const task = {
     id: 'c_lib_'+Date.now(),
     freq,
     label: _libSelectedTask.label,
     note: _libSelectedTask.note ? _libSelectedTask.note+(periodeNote?'\n'+periodeNote:'') : periodeNote,
     deadline,
+    moment: momentLib,
     jours,
     datesMois,
     sourceLib: _libSelectedTask.id,
@@ -4040,6 +4236,170 @@ initFirebaseOnStartup();
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
 }
+
+// ════════════════════════════════════════════════════════════════
+// COMMENTAIRES & PIÈCES JOINTES PAR TÂCHE
+// Stockage : taskComments[userId__roleId__taskId__period] = {text, attachName, attachData, attachType, savedAt, userName}
+// ════════════════════════════════════════════════════════════════
+
+function cmtKey(uid, rid, tid, freq){
+  return `${uid}__${rid}__${tid}__${periodKey(freq)}`;
+}
+
+// loadTaskComments() : chargement géré dans loadData() et onLoginSuccess()
+
+function saveTaskComments(){
+  try{ localStorage.setItem('hm_task_comments', JSON.stringify(taskComments)); }catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_task_comments','all', taskComments).catch(()=>{});
+  }
+}
+
+// ── Variables état modal ──
+let _cmtRoleId='', _cmtTaskId='', _cmtFreq='', _cmtAttachData=null, _cmtAttachName='', _cmtAttachType='';
+
+function openCommentModal(roleId, taskId, freq, taskLabel){
+  _cmtRoleId=roleId; _cmtTaskId=taskId; _cmtFreq=freq;
+  _cmtAttachData=null; _cmtAttachName=''; _cmtAttachType='';
+
+  const uid = currentUser?.id||'guest';
+  const key = cmtKey(uid, roleId, taskId, freq);
+  const existing = taskComments[key];
+
+  document.getElementById('cmt-task-label').textContent = taskLabel;
+  document.getElementById('cmt-textarea').value = existing?.text||'';
+  cmt_onInput(document.getElementById('cmt-textarea'));
+  document.getElementById('cmt-attach-preview').style.display='none';
+  document.getElementById('cmt-attach-preview').innerHTML='';
+  document.getElementById('cmt-attach-hint').style.display='';
+  document.getElementById('cmt-file-input').value='';
+
+  // Si commentaire existant — afficher d'abord la vue lecture
+  if(existing?.text || existing?.attachData){
+    document.getElementById('cmt-view-text').textContent = existing.text||'';
+    const meta = existing.savedAt ? '📅 '+new Date(existing.savedAt).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) + (existing.userName?' · '+existing.userName:'') : '';
+    document.getElementById('cmt-view-meta').textContent = meta;
+    // Pièce jointe en lecture
+    const attachBox = document.getElementById('cmt-view-attach');
+    if(existing.attachData){
+      if(existing.attachType?.startsWith('image/')){
+        attachBox.innerHTML = `<img src="${existing.attachData}" alt="${existing.attachName||'image'}">`;
+      } else {
+        attachBox.innerHTML = `<a href="${existing.attachData}" download="${existing.attachName||'fichier'}">📄 ${existing.attachName||'Fichier joint'}</a>`;
+      }
+    } else { attachBox.innerHTML=''; }
+    // Admin = lecture seule sur commentaires des autres
+    const isOwnComment = existing.userId === uid;
+    document.getElementById('cmt-view-section').style.display='';
+    document.getElementById('cmt-edit-section').style.display='none';
+    document.getElementById('cmt-edit-switch-btn').style.display = isOwnComment ? '' : 'none';
+    // Pré-charger la pièce jointe existante pour modification
+    if(existing.attachData){ _cmtAttachData=existing.attachData; _cmtAttachName=existing.attachName||''; _cmtAttachType=existing.attachType||''; }
+  } else {
+    document.getElementById('cmt-view-section').style.display='none';
+    document.getElementById('cmt-edit-section').style.display='';
+  }
+
+  document.getElementById('comment-modal-overlay').classList.add('open');
+}
+
+function cmt_switchToEdit(){
+  document.getElementById('cmt-view-section').style.display='none';
+  document.getElementById('cmt-edit-section').style.display='';
+  // Ré-afficher pièce jointe existante dans l'éditeur
+  if(_cmtAttachData){ cmt_showAttachPreview(_cmtAttachName, _cmtAttachData, _cmtAttachType); }
+  document.getElementById('cmt-textarea').focus();
+}
+
+function closeCommentModal(){
+  document.getElementById('comment-modal-overlay').classList.remove('open');
+  _cmtAttachData=null; _cmtAttachName=''; _cmtAttachType='';
+}
+
+function cmt_onInput(el){
+  const words = el.value.trim().split(/\s+/).filter(w=>w.length>0);
+  const count = words.length;
+  const wc = document.getElementById('cmt-word-count');
+  wc.textContent = `${count} / 150 mots`;
+  wc.className = 'comment-word-count' + (count>150?' over':'');
+  document.getElementById('cmt-save-btn').disabled = count>150;
+}
+
+function cmt_onFileSelect(input){
+  const file = input.files[0];
+  if(!file) return;
+  // Limite 2MB
+  if(file.size > 2*1024*1024){ showToast('⚠️ Fichier trop lourd (max 2MB)','#e74c3c'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    _cmtAttachData = e.target.result; // base64 data URL
+    _cmtAttachName = file.name;
+    _cmtAttachType = file.type;
+    cmt_showAttachPreview(file.name, _cmtAttachData, file.type);
+  };
+  reader.readAsDataURL(file);
+}
+
+function cmt_showAttachPreview(name, data, type){
+  const hint = document.getElementById('cmt-attach-hint');
+  const preview = document.getElementById('cmt-attach-preview');
+  hint.style.display='none';
+  preview.style.display='flex';
+  if(type?.startsWith('image/')){
+    preview.innerHTML = `<img src="${data}" alt="${name}"><button class="attach-remove" onclick="cmt_removeAttach()" title="Supprimer">✕</button>`;
+  } else {
+    preview.innerHTML = `<span class="attach-name">📄 ${name}</span><button class="attach-remove" onclick="cmt_removeAttach()" title="Supprimer">✕</button>`;
+  }
+}
+
+function cmt_removeAttach(){
+  _cmtAttachData=null; _cmtAttachName=''; _cmtAttachType='';
+  document.getElementById('cmt-file-input').value='';
+  document.getElementById('cmt-attach-preview').style.display='none';
+  document.getElementById('cmt-attach-preview').innerHTML='';
+  document.getElementById('cmt-attach-hint').style.display='';
+}
+
+function saveComment(){
+  const text = document.getElementById('cmt-textarea').value.trim();
+  const words = text.split(/\s+/).filter(w=>w.length>0);
+  if(words.length > 150){ showToast('⚠️ Commentaire trop long (max 150 mots)','#e74c3c'); return; }
+  if(!text && !_cmtAttachData){ showToast('⚠️ Commentaire vide et aucun fichier joint','#f39c12'); return; }
+
+  const uid = currentUser?.id||'guest';
+  const key = cmtKey(uid, _cmtRoleId, _cmtTaskId, _cmtFreq);
+  taskComments[key] = {
+    text, userId:uid, roleId:_cmtRoleId, taskId:_cmtTaskId, freq:_cmtFreq,
+    period: periodKey(_cmtFreq),
+    savedAt: new Date().toISOString(),
+    userName: currentUser?.name||'',
+    attachData: _cmtAttachData||null,
+    attachName: _cmtAttachName||null,
+    attachType: _cmtAttachType||null,
+  };
+  saveTaskComments();
+  closeCommentModal();
+  renderTasks(); // Mettre à jour les icônes 💬
+  showToast('💬 Commentaire enregistré','#27ae60');
+}
+
+// ── Compter les commentaires pour une tâche (tous users) ──
+function getTaskCommentCount(roleId, taskId, freq){
+  const period = periodKey(freq);
+  return Object.keys(taskComments).filter(k => {
+    const e = taskComments[k];
+    return e.roleId===roleId && e.taskId===taskId && e.period===period;
+  }).length;
+}
+
+// ── Admin : lire tous les commentaires d'une tâche ──
+function getAllCommentsForTask(roleId, taskId, freq){
+  const period = periodKey(freq);
+  return Object.values(taskComments).filter(e =>
+    e.roleId===roleId && e.taskId===taskId && e.period===period
+  ).sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
+}
+
 </script>
 </body>
 </html>
