@@ -1347,6 +1347,8 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderRayonsList(); renderSelectRayon();
+        // Purger les completions quotidiennes d'hier ou antérieures
+        purgeOldDailyCompletions();
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     } else {
@@ -1391,6 +1393,8 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderSelectRayon();
+        // Purger les completions quotidiennes d'hier ou antérieures
+        purgeOldDailyCompletions();
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     }
@@ -4151,10 +4155,79 @@ function renderLivePanel(snap,updatedAt,byUser){
 // ══════════════════════════════════════════════════════════════
 // RESET PÉRIODIQUE & INIT
 // ══════════════════════════════════════════════════════════════
+
+// Retourne la date d'hier au format YYYY-MM-DD
+function yesterdayKey(){
+  const d=new Date(); d.setDate(d.getDate()-1);
+  return d.toISOString().slice(0,10);
+}
+
+// Purge toutes les completions quotidiennes (freq Q) qui ne sont PAS de la date d'aujourd'hui.
+// Opère sur l'objet en mémoire + localStorage + Supabase.
+function purgeOldDailyCompletions(){
+  const today=todayKey();
+  // Trouver toutes les clés de période quotidienne qui ne sont pas aujourd'hui
+  // Format clé : uid__roleId__taskId__YYYY-MM-DD  (pour freq Q)
+  // On détecte une clé quotidienne car sa partie date (dernier segment) est au format YYYY-MM-DD
+  // et elle NE correspond PAS à une semaine (W) ni à un mois (YYYY-MM sans jour)
+  const keysToDelete=Object.keys(completions).filter(k=>{
+    const parts=k.split('__');
+    if(parts.length<4)return false;
+    const period=parts[parts.length-1];
+    // Clé quotidienne : format YYYY-MM-DD (10 chars, contient 2 tirets, pas de W)
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(period))return false;
+    return period!==today; // Garder seulement aujourd'hui
+  });
+  if(keysToDelete.length===0)return; // Rien à purger
+
+  keysToDelete.forEach(k=>delete completions[k]);
+
+  // Mettre à jour localStorage
+  const uid=currentUser?currentUser.id:'guest';
+  try{
+    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+    localStorage.setItem('hm_comp',JSON.stringify(completions));
+  }catch(e){}
+
+  // Mettre à jour Supabase : écrire les completions nettoyées pour cet utilisateur
+  if(_sbClient&&_fbConnected&&currentUser){
+    _sb.set('hm_completions',uid,completions).catch(()=>{});
+  }
+
+  // Nettoyer aussi les anciennes clés localStorage (ancienne structure)
+  Object.keys(localStorage).forEach(k=>{
+    if(k.startsWith('hm_')&&(k.includes('__Q__')||k.includes('_Q')))localStorage.removeItem(k);
+  });
+
+  console.log(`[Reset quotidien] ${keysToDelete.length} completion(s) journalière(s) purgée(s) pour la date ${today}`);
+  if(currentUser){
+    renderTasks(); renderProgressBar(); renderDashboard();
+    showToast('🔄 Tâches quotidiennes remises à zéro','#2980b9');
+  }
+}
+
 function resetPeriodicData(){
   const today=new Date().toDateString(),last=localStorage.getItem('hm_last_reset');
-  if(last!==today){Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&(k.includes('__Q__')||k.includes('_Q')))localStorage.removeItem(k);});localStorage.setItem('hm_last_reset',today);}
+  if(last!==today){
+    localStorage.setItem('hm_last_reset',today);
+    // Nettoyer anciennes clés localStorage (structure legacy)
+    Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&(k.includes('__Q__')||k.includes('_Q')))localStorage.removeItem(k);});
+    // La purge des completions en mémoire se fait après login via checkDailyReset()
+  }
 }
+
+// Vérifie si le jour a changé depuis la dernière vérification — appelé toutes les minutes
+let _lastCheckedDay=new Date().toISOString().slice(0,10);
+function checkDailyReset(){
+  const today=new Date().toISOString().slice(0,10);
+  if(today!==_lastCheckedDay){
+    _lastCheckedDay=today;
+    localStorage.setItem('hm_last_reset',new Date().toDateString());
+    purgeOldDailyCompletions();
+  }
+}
+// Lancer le timer de vérification minuit (toutes les 30 secondes suffit)
+setInterval(checkDailyReset, 30000);
 function setVH(){document.documentElement.style.setProperty('--vh',(window.innerHeight*0.01)+'px');}
 window.addEventListener('resize',setVH);setVH();
 // touchend supprimé — causait des blocages sur mobile
