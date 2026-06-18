@@ -1316,8 +1316,19 @@ function showLoginScreen(){
 // doLogin() déplacé plus haut avec les listeners
 function onLoginSuccess(){
   const uid=currentUser?currentUser.id:'guest';
-  // Charger les completions locales comme base initiale
-  try{ const s=localStorage.getItem('hm_comp_'+uid); completions=s?JSON.parse(s):{}; }catch(e){completions={};}
+  // Charger les completions locales comme base initiale — filtrer les jours passés
+  try{
+    const s=localStorage.getItem('hm_comp_'+uid);
+    if(s){
+      const raw=JSON.parse(s);
+      const today=todayKey();
+      Object.keys(raw).forEach(k=>{
+        const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+        if(m && m[1]!==today) delete raw[k];
+      });
+      completions=raw;
+    } else { completions={}; }
+  }catch(e){completions={};}
 
   // ── Supabase : charger TOUT depuis Supabase au login (source de vérité) ──
   if(_sbClient && _fbConnected){
@@ -1346,10 +1357,16 @@ function onLoginSuccess(){
           localStorage.setItem('hm_users',JSON.stringify(usersData));
           renderUsersList();
         }
-        // Completions fusionnées
+        // Completions fusionnées — filtrer immédiatement les jours passés
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{if(r.data&&typeof r.data==='object')Object.assign(merged,r.data);});
+          // Garder uniquement les coches d'aujourd'hui (anti-résurrection)
+          const today=todayKey();
+          Object.keys(merged).forEach(k=>{
+            const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+            if(m && m[1]!==today) delete merged[k];
+          });
           completions=merged;
           localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
         }
@@ -1400,6 +1417,12 @@ function onLoginSuccess(){
           localStorage.setItem('hm_users',JSON.stringify(usersData));
         }
         if(myComp && typeof myComp==='object'){
+          // Filtrer les jours passés dès le chargement (anti-résurrection)
+          const today=todayKey();
+          Object.keys(myComp).forEach(k=>{
+            const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+            if(m && m[1]!==today) delete myComp[k];
+          });
           completions=myComp;
           localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
         }
@@ -3724,7 +3747,7 @@ async function initSupabase(cfg){
     // hm_completions : re-fetch systématique (payload.new.data souvent null en jsonb)
     _sb.on('hm_completions', async (payload)=>{
       const changedUserId = payload.new?.user_id || payload.old?.user_id;
-      // Helper local : filtrer les clés d'un jour passé
+      // Helper local : ne garder que les clés d'aujourd'hui (anti-résurrection jours passés)
       function _filterTodayOnly(data){
         const today=todayKey();
         const filtered={};
@@ -3735,22 +3758,23 @@ async function initSupabase(cfg){
         return filtered;
       }
       if(isDirecteur()){
-        // Admin : refusionner toutes les completions
+        // Admin : refusionner toutes les completions — merge ADDITIF
         const rows = await _sb.getAll('hm_completions').catch(()=>[]);
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
-          merged=_filterTodayOnly(merged); // ← guard anti-résurrection
-          completions=merged;
+          merged=_filterTodayOnly(merged);
+          // Merge additif : ajouter sans écraser les coches locales
+          Object.keys(merged).forEach(k=>{ if(merged[k]) completions[k]=merged[k]; });
           localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
         }
         if(currentUser){ renderTasks(); renderProgressBar(); renderDashboard(); }
         if(_livePanel){ const r5=await _sbClient.from('hm_events').select('id,data').catch(()=>({data:[]})); const evts5={}; (r5.data||[]).forEach(r=>{ if(r.data) evts5[r.id]=r.data; }); _eventsCache=evts5; renderLivePanelFromEvents(evts5); }
       } else if(currentUser && changedUserId===currentUser.id){
-        // User : sa propre ligne a été modifiée (reset par admin)
+        // User : sa propre ligne a été modifiée (reset par admin) — ici on écrase volontairement
         const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
         if(myComp && typeof myComp==='object'){
-          completions=myComp;
+          completions=_filterTodayOnly(myComp);
           localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
           renderTasks(); renderProgressBar(); renderDashboard();
           showToast('🔄 Tâches synchronisées','#2980b9');
@@ -4354,13 +4378,14 @@ function startSupabasePoll(){
       }
 
       // ── Polling des completions (fallback si Realtime WS défaillant) ──
-      // Guard : ne jamais réimporter des completions d'un jour passé (évite la résurrection post-minuit)
+      // Stratégie : merge ADDITIF — on ajoute les coches manquantes, on ne supprime jamais une coche locale
+      // Le filtre date empêche les résurrections de jours passés
       function _filterTodayCompletions(data){
         const today=todayKey();
         const filtered={};
         Object.keys(data).forEach(k=>{
           const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
-          // Garder : clés non-quotidiennes (hebdo/mensuel/etc.) ou clés de la date du jour
+          // Garder : clés non-quotidiennes (hebdo/mensuel/etc.) OU clés de la date du jour
           if(!m || m[1]===today) filtered[k]=data[k];
         });
         return filtered;
@@ -4370,11 +4395,11 @@ function startSupabasePoll(){
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
-          merged=_filterTodayCompletions(merged); // ← guard anti-résurrection
-          const newHash=JSON.stringify(merged);
-          if(newHash !== (window._sbPollCompHash||'')){
-            window._sbPollCompHash=newHash;
-            completions=merged;
+          merged=_filterTodayCompletions(merged);
+          // Merge ADDITIF : ajouter les coches distantes manquantes sans écraser les locales
+          const before=JSON.stringify(completions);
+          Object.keys(merged).forEach(k=>{ if(merged[k]) completions[k]=merged[k]; });
+          if(JSON.stringify(completions)!==before){
             localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
             renderTasks(); renderProgressBar(); renderDashboard();
             if(_livePanel){
@@ -4387,14 +4412,13 @@ function startSupabasePoll(){
       } else if(currentUser){
         const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
         if(myComp && typeof myComp==='object'){
-          const filtered=_filterTodayCompletions(myComp); // ← guard anti-résurrection
-          const newHash=JSON.stringify(filtered);
-          if(newHash !== (window._sbPollCompHash||'')){
-            window._sbPollCompHash=newHash;
-            completions=filtered;
+          const filtered=_filterTodayCompletions(myComp);
+          // Merge ADDITIF
+          const before=JSON.stringify(completions);
+          Object.keys(filtered).forEach(k=>{ if(filtered[k]) completions[k]=filtered[k]; });
+          if(JSON.stringify(completions)!==before){
             localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
             renderTasks(); renderProgressBar();
-            showToast('\uD83D\uDD04 Tâches synchronisées','#2980b9');
           }
         }
       }
