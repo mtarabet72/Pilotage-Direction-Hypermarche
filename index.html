@@ -673,24 +673,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 <!-- ══════════════ PARAMÈTRES ══════════════ -->
 <div id="view-settings" class="view">
 
-  <!-- Notifications -->
-  <div class="settings-card" style="border-left:4px solid #e67e22;">
-    <h3>🔔 Notifications</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-      Activez les notifications pour recevoir des alertes sur votre appareil même si l'app est en arrière-plan.
-    </div>
-    <div id="notif-status-bar" style="padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:12px;background:#fef9f0;color:#e67e22;">
-      🔔 Statut : en attente…
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <button class="btn-primary" onclick="enableNotifications()" style="background:#e67e22;border-color:#e67e22;color:#fff;">🔔 Activer les notifications</button>
-      <button class="btn-secondary" onclick="testNotification()">🧪 Tester</button>
-    </div>
-    <div style="margin-top:12px;font-size:11px;color:var(--muted);">
-      • <b>Utilisateurs</b> : alerte 5 min avant la deadline d'une tâche non effectuée.<br>
-      • <b>Admin</b> : notification dès qu'une tâche est cochée par un collaborateur.
-    </div>
-  </div>
+  <!-- Supabase Config -->
   <div class="settings-card" id="firebase-config-card" style="border-left:4px solid #3ecf8e;">
     <h3>⚡ Configuration Supabase (Suivi Live)</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
@@ -1364,6 +1347,7 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderRayonsList(); renderSelectRayon();
+        purgeOldDailyCompletions(true);
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     } else {
@@ -1408,6 +1392,7 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderSelectRayon();
+        purgeOldDailyCompletions(true);
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     }
@@ -1416,20 +1401,18 @@ function onLoginSuccess(){
   document.getElementById('login-overlay').classList.add('hidden');
   updateHeaderUser();
   applyAccessControl();
+  // Demander permission notifications browser
+  setTimeout(requestNotifPermission, 1500);
   const today=new Date().toISOString().slice(0,10);
   document.getElementById("date-from").value=today;
   document.getElementById("date-to").value=today;
   document.getElementById("res-date").value=today;
   renderDashboard();
   renderExportScope();
-  // ── Notifications ──
-  updateNotifStatusBar();
-  if(!isDirecteur() && Notification.permission==='granted') startNotifWatcher();
 }
 function doLogout(){
   currentUser=null;
   sessionStorage.removeItem('hm_session');
-  if(_notifWatcherInterval){ clearInterval(_notifWatcherInterval); _notifWatcherInterval=null; }
   document.getElementById('login-username').value='';
   document.getElementById('login-password').value='';
   showLoginScreen();
@@ -1504,7 +1487,7 @@ function showView(v){
   if(v==="tasks"){if(viewMode==='rayon'&&rayonActif){renderSidebar();afficherRayon(rayonActif);}else{renderSidebar();renderTaskView();}}
   if(v==="results")renderResults();
   if(v==="export")renderExportScope();
-  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();updateNotifStatusBar();}
+  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1637,127 +1620,6 @@ function fmtDateStr(s){if(!s)return"";const[y,m,d]=s.split("-");return `${d}/${m
 function showToast(msg,color='#1a1f2e'){
   const t=document.getElementById("toast");t.textContent=msg;t.style.background=color;
   t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2500);
-}
-
-// ══════════════════════════════════════════════════════════════
-// SYSTÈME DE NOTIFICATIONS
-// ══════════════════════════════════════════════════════════════
-
-// ── UI : activer notifications + status bar ──
-function updateNotifStatusBar(){
-  const bar=document.getElementById('notif-status-bar');
-  if(!bar)return;
-  if(!('Notification' in window)){
-    bar.style.background='#fdecea';bar.style.color='#c0392b';
-    bar.textContent='❌ Notifications non supportées par ce navigateur.';return;
-  }
-  if(Notification.permission==='granted'){
-    bar.style.background='#eafaf1';bar.style.color='#1a7a40';
-    bar.textContent='✅ Notifications activées — vous recevrez des alertes sur cet appareil.';
-  } else if(Notification.permission==='denied'){
-    bar.style.background='#fdecea';bar.style.color='#c0392b';
-    bar.textContent='🚫 Notifications bloquées — autorisez-les dans les paramètres du navigateur.';
-  } else {
-    bar.style.background='#fef9f0';bar.style.color='#e67e22';
-    bar.textContent='🔔 Notifications non activées — cliquez sur "Activer" pour commencer.';
-  }
-}
-function enableNotifications(){
-  if(!('Notification' in window)){showToast('❌ Navigateur non compatible','#e74c3c');return;}
-  if(Notification.permission==='granted'){showToast('✅ Notifications déjà activées','#27ae60');updateNotifStatusBar();return;}
-  if(Notification.permission==='denied'){showToast('🚫 Bloquées — modifiez les paramètres du navigateur','#e74c3c');updateNotifStatusBar();return;}
-  Notification.requestPermission().then(p=>{
-    updateNotifStatusBar();
-    if(p==='granted'){
-      showToast('✅ Notifications activées !','#27ae60');
-      if(!isDirecteur()) startNotifWatcher();
-      // Notif de confirmation
-      setTimeout(()=>sendBrowserNotif('✅ Pilotage Hypermarché','Notifications activées avec succès !',null,'hm_test_ok'),500);
-    } else {
-      showToast('🚫 Notifications refusées','#e74c3c');
-    }
-  });
-}
-function testNotification(){
-  if(Notification.permission!=='granted'){showToast('⚠️ Activez les notifications d\'abord','#e67e22');return;}
-  if(isDirecteur()){
-    sendBrowserNotif('✅ Test Admin — Tâche cochée','Jean Martin : Contrôle ouverture caisses · 08:32',null,'hm_test_admin');
-    showToast('🧪 Notification test envoyée','#2980b9');
-  } else {
-    sendBrowserNotif('⏰ Test Rappel — Tâche à faire','Relevé températures frais\nDélai : avant 12:00 (5 min)',null,'hm_test_user');
-    showToast('🧪 Notification test envoyée','#2980b9');
-  }
-}
-
-function requestNotifPermission(){
-  if(!('Notification' in window))return;
-  if(Notification.permission==='granted') return; // déjà OK, pas de popup intrusive
-  // Ne pas demander automatiquement — l'user choisit depuis Paramètres
-}
-
-// ── Envoyer une notification browser native ──
-function sendBrowserNotif(title, body, icon, tag){
-  if(!('Notification' in window)||Notification.permission!=='granted') return;
-  try{
-    new Notification(title,{
-      body, icon: icon||'./icons/icon-192.png',
-      tag: tag||('hm_notif_'+Date.now()),
-      badge:'./icons/icon-192.png',
-      vibrate:[200,100,200]
-    });
-  }catch(e){}
-}
-
-// ── Stocker les notifs déjà envoyées (éviter doublons) ──
-const _notifSentSet = new Set();
-
-// ── Watcher tâches utilisateur : alerte 5 min avant deadline ──
-let _notifWatcherInterval = null;
-function startNotifWatcher(){
-  if(_notifWatcherInterval) clearInterval(_notifWatcherInterval);
-  _notifWatcherInterval = setInterval(()=>{
-    if(!currentUser || isDirecteur()) return;
-    const now = new Date();
-    const hNow = now.getHours()*60 + now.getMinutes();
-    const todayStr = now.toISOString().slice(0,10);
-
-    getAllRoles().forEach(role=>{
-      if(!canEditRole(role.id)) return;
-      getAllTasks(role.id).filter(t=>t.freq==='Q'&&t.deadline).forEach(task=>{
-        const [dh,dm] = task.deadline.split(':').map(Number);
-        const deadlineMin = dh*60+dm;
-        const diff = deadlineMin - hNow; // minutes restantes
-        const notifKey = `${todayStr}__${role.id}__${task.id}__deadline5`;
-        const alreadyDone = isTaskDone(role.id, task.id, task.freq);
-
-        // Notification 5 min avant deadline si tâche non faite
-        if(diff>=0 && diff<=5 && !alreadyDone && !_notifSentSet.has(notifKey)){
-          _notifSentSet.add(notifKey);
-          sendBrowserNotif(
-            '⏰ Tâche à faire maintenant !',
-            `${task.label}\nDélai : avant ${task.deadline} (${diff<=0?'maintenant':diff+' min'})`,
-            null, notifKey
-          );
-          showToast(`⏰ Rappel : "${task.label.substring(0,35)}" avant ${task.deadline}`,'#e67e22');
-        }
-      });
-    });
-  }, 30000); // vérification toutes les 30 secondes
-}
-
-// ── Notification admin : tâche cochée par un utilisateur ──
-// Appelé depuis le listener hm_events Realtime
-function notifyAdminTaskDone(event){
-  if(!event||!isDirecteur()) return;
-  const notifKey = `admin_done__${event.uid}__${event.taskId}__${event.period}`;
-  if(_notifSentSet.has(notifKey)) return;
-  _notifSentSet.add(notifKey);
-  const statusIcon = event.statut==='VERT' ? '✅' : '⚠️';
-  sendBrowserNotif(
-    `${statusIcon} Tâche réalisée — ${event.userName||'?'}`,
-    `${event.taskLabel||'?'}\n${event.roleLabel||''} · ${event.heure||''}`,
-    null, notifKey
-  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2183,6 +2045,8 @@ function saveCustomTask(){
   saveData();broadcastUpdate();closeAddForm();renderTasks();renderProgressBar();
   const assigneeName=assignedTo?(usersData.find(u=>u.id===assignedTo)?.name||'?'):'tous';
   showToast('✅ Tâche assignée à '+assigneeName,'#27ae60');
+  // Notifier les users concernés via le polling (côté user, pas admin)
+  // L'admin vient de créer la tâche — pas besoin de le notifier lui-même
 }
 function delCustom(id){
   if(!confirm("Supprimer cette tâche ?"))return;
@@ -2848,17 +2712,31 @@ function renderResults(){
 }
 function buildDailyResults(dateStr){
   const dayLabel=fmtDate(new Date(dateStr+'T00:00:00'));
-  const logs=completionLog.filter(e=>e.freq==='Q'&&e.period===dateStr);
-  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
-  const doneCount=logs.length,pct=totalQ?Math.round(doneCount/totalQ*100):0;
+  // Filtrer le log par date ET dédupliquer (garder la dernière entrée par roleId+taskId)
+  const rawLogs=completionLog.filter(e=>e.freq==='Q'&&e.period===dateStr);
+  const logsMap=new Map(); // clé: roleId+'__'+taskId => dernière entrée
+  rawLogs.forEach(e=>{ logsMap.set(e.roleId+'__'+e.taskId, e); });
+  const logs=[...logsMap.values()];
+  let totalQ=0,doneCount=0;
+  const roleStats={};
+  getAllRoles().forEach(r=>{
+    const rTasks=getAllTasks(r.id).filter(t=>t.freq==='Q');
+    const rLogs=logs.filter(e=>e.roleId===r.id);
+    // Compter: pour chaque tâche existante, est-elle dans le log?
+    let rd=0;
+    rTasks.forEach(t=>{ if(rLogs.find(e=>e.taskId===t.id)) rd++; });
+    roleStats[r.id]={tasks:rTasks, logs:rLogs, done:rd};
+    totalQ+=rTasks.length; doneCount+=rd;
+  });
+  const pct=totalQ?Math.round(doneCount/totalQ*100):0;
   const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
   let rolesHtml='';
   getAllRoles().forEach(r=>{
-    const rLogs=logs.filter(e=>e.roleId===r.id);
-    const rd=rLogs.length;const totalRQ=getAllTasks(r.id).filter(t=>t.freq==='Q').length;
+    const {tasks:rTasks,logs:rLogs,done:rd}=roleStats[r.id]||{tasks:[],logs:[],done:0};
+    const totalRQ=rTasks.length;
     const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
     // Détail des tâches avec horaire
-    const tasksDetail=getAllTasks(r.id).filter(t=>t.freq==='Q').map(t=>{
+    const tasksDetail=rTasks.map(t=>{
       const logE=rLogs.find(e=>e.taskId===t.id);
       const done=!!logE;
       let horaireHtml='';
@@ -2913,9 +2791,17 @@ function buildCumulResults(dateStr){
 }
 function buildWeeklyResults(dateStr){
   const weekStr=weekKeyForDate(dateStr);const weekDates=getWeekDates(dateStr);const today=todayKey();
-  const hLogs=completionLog.filter(e=>e.freq==='H'&&e.period===weekStr);
-  let totalH=0;getAllRoles().forEach(r=>{totalH+=getAllTasks(r.id).filter(t=>t.freq==='H').length;});
-  const doneH=hLogs.length,pctH=totalH?Math.round(doneH/totalH*100):0;
+  // Dédupliquer le log hebdo par roleId+taskId
+  const rawHLogs=completionLog.filter(e=>e.freq==='H'&&e.period===weekStr);
+  const hLogsMap=new Map();rawHLogs.forEach(e=>{hLogsMap.set(e.roleId+'__'+e.taskId,e);});
+  const hLogs=[...hLogsMap.values()];
+  let totalH=0,doneH=0;
+  getAllRoles().forEach(r=>{
+    const rH=getAllTasks(r.id).filter(t=>t.freq==='H');
+    totalH+=rH.length;
+    rH.forEach(t=>{if(hLogs.find(e=>e.roleId===r.id&&e.taskId===t.id))doneH++;});
+  });
+  const pctH=totalH?Math.round(doneH/totalH*100):0;
   let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',totalDoneQ=0,totalPossibleQ=0;
@@ -2937,7 +2823,9 @@ function buildWeeklyResults(dateStr){
         const rHLogs=hLogs.filter(e=>e.roleId===r.id);
         const rHTasks=getAllTasks(r.id).filter(t=>t.freq==='H');
         if(!rHTasks.length)return;
-        const rd=rHLogs.length,totalR=rHTasks.length;
+        // Compter uniquement les tâches existantes trouvées dans le log
+        let rd=0;rHTasks.forEach(t=>{if(rHLogs.find(e=>e.taskId===t.id))rd++;});
+        const totalR=rHTasks.length;
         const rPct=totalR?Math.round(rd/totalR*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
         const tasksHtml=rHTasks.map(t=>{
           const logE=rHLogs.find(e=>e.taskId===t.id);const done=!!logE;
@@ -2981,7 +2869,7 @@ function toggleScope(id,btn){
   else{scopeSet.delete("ALL");if(scopeSet.has(id))scopeSet.delete(id);else scopeSet.add(id);if(scopeSet.size===0)scopeSet.add("ALL");}
   renderExportScope();
 }
-function getExportRoles(){if(scopeSet.has("ALL"))return ROLES;return getAllRoles().filter(r=>scopeSet.has(r.id));}
+function getExportRoles(){if(scopeSet.has("ALL"))return getAllRoles();return getAllRoles().filter(r=>scopeSet.has(r.id));}
 function getExportFreq(){return exportType==="C"?null:exportType;}
 function getExportPeriodLabel(){
   const d=new Date();
@@ -2994,13 +2882,16 @@ function getExportPeriodLabel(){
 function buildReportHTML(forPrint=false){
   const roles=getExportRoles(),showDone=document.getElementById("opt-show-done").checked,showTodo=document.getElementById("opt-show-todo").checked,showNote=document.getElementById("opt-show-note").checked;
   const freq=getExportFreq(),periodLabel=getExportPeriodLabel(),now=new Date().toLocaleString("fr-FR");
-  let customLogEntries=null;
-  if(exportType==="C"){const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;if(f&&t)customLogEntries=completionLog.filter(e=>e.period>=f&&e.period<=t);}
+  const chosenDate=getExportDateVal();
+  function _tp(fr){if(fr==='Q')return chosenDate;if(fr==='H')return weekKeyForDate(chosenDate);if(fr==='M')return chosenDate.slice(0,7);return chosenDate;}
+  let logEntries=null;
+  if(exportType==="C"){const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;if(f&&t)logEntries=completionLog.filter(e=>e.period>=f&&e.period<=t);}
+  else{const tp=_tp(freq);logEntries=completionLog.filter(e=>e.period===tp&&(freq===null||e.freq===freq));}
+  function _isDoneInLog(rid,tid,fr){if(!logEntries)return isTaskDone(rid,tid,fr);return !!logEntries.find(e=>e.roleId===rid&&e.taskId===tid);}
   let body="",totalDone=0,totalTasks=0;
   roles.forEach(r=>{
     let tasks=getAllTasks(r.id);if(freq)tasks=tasks.filter(t=>t.freq===freq);
-    if(exportType==="C"&&customLogEntries!==null){tasks=tasks.map(t=>({...t,_done:!!customLogEntries.find(e=>e.roleId===r.id&&e.taskId===t.id)}));}
-    else{tasks=tasks.map(t=>({...t,_done:isTaskDone(r.id,t.id,t.freq)}));}
+    tasks=tasks.map(t=>({...t,_done:_isDoneInLog(r.id,t.id,t.freq)}));
     const done=tasks.filter(t=>t._done).length;totalDone+=done;totalTasks+=tasks.length;
     const pct=tasks.length?Math.round(done/tasks.length*100):0,pctColor=pct>=80?"#1a7a40":pct>=50?"#b85c00":"#c0392b";
     const filteredTasks=tasks.filter(t=>(t._done&&showDone)||(!t._done&&showTodo));
@@ -3583,10 +3474,8 @@ async function initSupabase(cfg){
           .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
         if(recent){
           const age=(Date.now()-new Date(recent.completedAt).getTime())/1000;
-          if(age<8){
-            showToast('\u2705 '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
-            notifyAdminTaskDone(recent);
-          }
+          if(age<8) showToast('\u2705 '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
+          if(age<8) _onTaskEventReceived(recent); // notification browser admin
         }
       }
     });
@@ -3633,7 +3522,11 @@ async function initSupabase(cfg){
           customTasks=fresh;
           localStorage.setItem('hm_cust',JSON.stringify(fresh));
           renderTasks(); renderProgressBar();
-          if(!isDirecteur()) showToast('📋 Nouvelles tâches reçues','#2980b9');
+          if(!isDirecteur()){
+            showToast('📋 Nouvelles tâches reçues','#2980b9');
+            // Vérifier immédiatement si une nouvelle tâche m'est assignée
+            setTimeout(checkUpcomingTaskNotifs, 300);
+          }
         }
       }
       else if(key==='hm_task_overrides'){
@@ -3774,6 +3667,15 @@ function pushTaskEventToAdmin(tid, freq, isDone, task, role, now){
     localStorage.setItem('hm_events_local',JSON.stringify(evts));
     localStorage.setItem('hm_events_tick',Date.now().toString());
   }catch(e){}
+}
+
+// ── Notification admin locale (si l'admin est connecté sur le même appareil) ──
+// Appelée AUSSI depuis le realtime listener quand un event arrive
+function _onTaskEventReceived(event){
+  if(!isDirecteur()||!event)return;
+  if(event.isDone){
+    notifyAdminTaskDone(event.taskLabel,event.userName,event.roleLabel,event.roleIcon||'📋',true);
+  }
 }
 
 
@@ -4044,6 +3946,17 @@ function startLocalPolling(){
       _liveLastTick=tick;
       const evts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
       renderLivePanelFromEvents(evts);
+      // Notification admin si une tâche vient d'être cochée (< 5s)
+      if(isDirecteur()){
+        const todayStr=todayKey();
+        const recent=Object.values(evts)
+          .filter(e=>e&&e.period===todayStr&&e.isDone)
+          .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
+        if(recent){
+          const age=(Date.now()-new Date(recent.completedAt).getTime())/1000;
+          if(age<5) _onTaskEventReceived(recent);
+        }
+      }
     }catch(e){}
   },2000);
 }
@@ -4093,7 +4006,10 @@ function startSupabasePoll(){
           customTasks = ct;
           localStorage.setItem('hm_cust', JSON.stringify(ct));
           renderTasks(); renderProgressBar();
-          if(!isDirecteur()) showToast('📋 Tâches mises à jour','#2980b9');
+          if(!isDirecteur()){
+            showToast('📋 Tâches mises à jour','#2980b9');
+            setTimeout(checkUpcomingTaskNotifs, 300);
+          }
         }
       }
       // Vérifier hm_task_notes (commentaires + pièces jointes)
@@ -4294,12 +4210,259 @@ function renderLivePanel(snap,updatedAt,byUser){
 }
 
 // ══════════════════════════════════════════════════════════════
+// SYSTÈME DE NOTIFICATIONS BROWSER (PWA)
+// ══════════════════════════════════════════════════════════════
+
+// ── Demander la permission de notification au login ──
+function requestNotifPermission(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted') showToast('🔔 Notifications activées','#27ae60');
+    });
+  }
+}
+
+// ── Envoyer une notification native ──
+function sendNotif(title, body, icon, tag){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  try{
+    const n=new Notification(title,{
+      body, icon:icon||'./icons/icon-192.png',
+      tag:tag||('hm-'+Date.now()),
+      badge:'./icons/icon-192.png',
+      requireInteraction:false
+    });
+    n.onclick=()=>{ window.focus(); n.close(); };
+    setTimeout(()=>n.close(),8000);
+  }catch(e){}
+}
+
+// ── Clés de notifications déjà envoyées (pour éviter les doublons par session) ──
+let _notifSentKeys=new Set();
+// ── Ensemble des IDs de tâches custom déjà notifiées "nouvelle tâche" ──
+// Persisté en localStorage pour survivre aux rechargements
+function _getSeenNewTasks(){
+  try{ return new Set(JSON.parse(localStorage.getItem('hm_notif_new_tasks')||'[]')); }catch(e){return new Set();}
+}
+function _markNewTaskSeen(taskId){
+  const s=_getSeenNewTasks(); s.add(taskId);
+  try{ localStorage.setItem('hm_notif_new_tasks',JSON.stringify([...s])); }catch(e){}
+}
+
+// ─────────────────────────────────────────────────────────────
+// A) NOTIFICATIONS UTILISATEUR : rappel 5 min avant deadline
+//    + notification immédiate pour toute nouvelle tâche assignée
+// ─────────────────────────────────────────────────────────────
+function checkUpcomingTaskNotifs(){
+  if(!currentUser||isDirecteur())return; // seulement pour users non-admin
+  if(Notification.permission!=='granted')return;
+
+  const uid=currentUser.id;
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const todayStr=todayKey();
+  const todayDay=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][now.getDay()];
+  const todayDate=now.getDate();
+  const seenNewTasks=_getSeenNewTasks();
+
+  // Parcourir tous les rôles accessibles à cet utilisateur
+  getAllRoles().forEach(r=>{
+    if(!canEditRole(r.id)&&currentUser.ownRoleId!==r.id)return;
+    const customForRole=customTasks[r.id]||[];
+
+    customForRole.forEach(t=>{
+      // ── A1. Nouvelle tâche assignée par admin ──
+      // Critère : tâche custom, assignée à cet user (ou broadcast), créée récemment (< 1h)
+      const isForMe=!t.assignedTo||t.assignedTo===''||t.assignedTo===uid;
+      if(isForMe && t.createdBy && t.createdBy!==uid && !seenNewTasks.has(t.id)){
+        const createdAgo=t.createdAt?(Date.now()-new Date(t.createdAt).getTime()):999999999;
+        if(createdAgo < 3600000){ // moins d'1h
+          _markNewTaskSeen(t.id);
+          const roleLabel=r.label||'';
+          const dlLabel=t.deadline?` · avant ${t.deadline}`:'';
+          sendNotif(
+            `📋 Nouvelle tâche assignée`,
+            `${r.icon} ${roleLabel}\n📝 ${t.label}${dlLabel}\n👤 Ajoutée par la Direction`,
+            null,
+            `new-task-${t.id}`
+          );
+          showToast(`📋 Nouvelle tâche : "${t.label}"${dlLabel}`,'#2980b9');
+        }
+      }
+
+      // ── A2. Rappel 5 min avant deadline ──
+      if(!t.deadline)return;
+      if(!isForMe)return;
+
+      // Vérifier si la tâche est active aujourd'hui selon fréquence
+      if(t.freq==='H' && t.jours&&t.jours.length>0&&!t.jours.includes(todayDay))return;
+      if(t.freq==='M' && t.datesMois&&t.datesMois.length>0&&!t.datesMois.map(Number).includes(todayDate))return;
+
+      // Vérifier si déjà faite
+      if(isTaskDone(r.id,t.id,t.freq))return;
+
+      const [dh,dm]=t.deadline.split(':').map(Number);
+      const deadlineMin=dh*60+dm;
+      const diff=deadlineMin-nowMin;
+
+      if(diff>=4&&diff<=6){
+        const notifKey=`${uid}__${r.id}__${t.id}__${todayStr}__remind`;
+        if(_notifSentKeys.has(notifKey))return;
+        _notifSentKeys.add(notifKey);
+        const dpi=deadlinePeriodInfo(t.deadline);
+        sendNotif(
+          `⏰ Rappel — 5 min avant la deadline`,
+          `${r.icon} ${r.label}\n📋 ${t.label}\n🕐 Avant ${t.deadline}`,
+          null, notifKey
+        );
+        showToast(`⏰ Rappel : "${t.label}" — avant ${t.deadline}`,'#f39c12');
+      }
+    });
+
+    // ── A2 aussi pour les tâches de base (non-custom) avec deadline ──
+    r.taches&&r.taches.forEach(t=>{
+      const tEff=getTaskEffective(r,t);
+      if(!tEff.deadline)return;
+      if(!canEditRole(r.id)&&currentUser.ownRoleId!==r.id)return;
+      if(tEff.freq==='H'&&tEff.jours&&tEff.jours.length>0&&!tEff.jours.includes(todayDay))return;
+      if(tEff.freq==='M'&&tEff.datesMois&&tEff.datesMois.length>0&&!tEff.datesMois.map(Number).includes(todayDate))return;
+      if(isTaskDone(r.id,tEff.id,tEff.freq))return;
+      const [dh,dm]=tEff.deadline.split(':').map(Number);
+      const deadlineMin=dh*60+dm;
+      const diff=deadlineMin-nowMin;
+      if(diff>=4&&diff<=6){
+        const notifKey=`${uid}__${r.id}__${tEff.id}__${todayStr}__remind`;
+        if(_notifSentKeys.has(notifKey))return;
+        _notifSentKeys.add(notifKey);
+        const dpi=deadlinePeriodInfo(tEff.deadline);
+        sendNotif(
+          `⏰ Rappel — 5 min avant la deadline`,
+          `${r.icon} ${r.label}\n📋 ${tEff.label}\n🕐 Avant ${tEff.deadline}`,
+          null, notifKey
+        );
+        showToast(`⏰ Rappel : "${tEff.label}" — avant ${tEff.deadline}`,'#f39c12');
+      }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// B) NOTIFICATIONS ADMIN : tâche exécutée par un utilisateur
+// ─────────────────────────────────────────────────────────────
+function notifyAdminTaskDone(taskLabel, userName, roleLabel, roleIcon, isDone){
+  if(!isDirecteur())return;
+  if(!('Notification' in window))return;
+
+  // Si permission pas encore demandée, la demander maintenant
+  if(Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted') _doNotifyAdminTaskDone(taskLabel, userName, roleLabel, roleIcon, isDone);
+    });
+    return;
+  }
+  if(Notification.permission!=='granted')return;
+  _doNotifyAdminTaskDone(taskLabel, userName, roleLabel, roleIcon, isDone);
+}
+
+function _doNotifyAdminTaskDone(taskLabel, userName, roleLabel, roleIcon, isDone){
+  if(!isDone)return; // notifier seulement à la complétion (pas au décocochage)
+  const now=new Date();
+  const heureStr=now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  // Anti-doublon : même tâche + même user dans les 30 secondes
+  const dedupKey=`admin-done-${userName}-${taskLabel}`;
+  if(_notifSentKeys.has(dedupKey))return;
+  _notifSentKeys.add(dedupKey);
+  setTimeout(()=>_notifSentKeys.delete(dedupKey), 30000); // reset après 30s
+
+  sendNotif(
+    `✅ Tâche effectuée — ${heureStr}`,
+    `${roleIcon||'📋'} ${roleLabel}\n👤 ${userName}\n📋 ${taskLabel}`,
+    null,
+    'admin-task-'+Date.now()
+  );
+}
+
+// ── Notifier aussi l'admin via in-app toast quand un event arrive ──
+function _onTaskEventReceived(event){
+  if(!isDirecteur()||!event)return;
+  if(event.isDone){
+    notifyAdminTaskDone(event.taskLabel, event.userName, event.roleLabel, event.roleIcon||'📋', true);
+  }
+}
+
+// ── Appeler checkUpcomingTaskNotifs aussi quand une nouvelle tâche custom est sauvegardée ──
+// (hook appelé depuis addCustomTask)
+function _onCustomTaskAdded(){
+  if(isDirecteur())return;
+  // Vérifier immédiatement les nouvelles tâches assignées
+  setTimeout(checkUpcomingTaskNotifs, 500);
+}
+
+// Lancer le vérificateur toutes les 30 secondes
+setInterval(checkUpcomingTaskNotifs, 30000);
+
+// ══════════════════════════════════════════════════════════════
 // RESET PÉRIODIQUE & INIT
 // ══════════════════════════════════════════════════════════════
+
+function purgeOldDailyCompletions(silent){
+  const today=todayKey();
+  const keysToDelete=Object.keys(completions).filter(k=>{
+    const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+    return m && m[1]!==today;
+  });
+  if(keysToDelete.length===0)return;
+  keysToDelete.forEach(k=>delete completions[k]);
+  const uid=currentUser?currentUser.id:'guest';
+  try{
+    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
+    localStorage.setItem('hm_comp',JSON.stringify(completions));
+  }catch(e){}
+  if(_sbClient&&_fbConnected&&currentUser){
+    _sb.set('hm_completions',uid,completions).catch(()=>{});
+    if(isDirecteur()){
+      _sb.getAll('hm_completions').then(rows=>{
+        if(!rows)return;
+        rows.forEach(r=>{
+          if(!r.data)return;
+          const cleaned={};
+          Object.keys(r.data).forEach(k=>{
+            const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+            if(!m||m[1]===today) cleaned[k]=r.data[k];
+          });
+          const rowUid=r.user_id||r.key;
+          if(rowUid!==uid) _sb.set('hm_completions',rowUid,cleaned).catch(()=>{});
+        });
+      }).catch(()=>{});
+    }
+  }
+  console.log(`[Reset quotidien] ${keysToDelete.length} completion(s) purgée(s) — conservé: ${today}`);
+  if(!silent&&currentUser){
+    renderTasks(); renderProgressBar(); renderDashboard();
+    showToast('🔄 Nouvelles tâches du jour — compteurs remis à zéro','#27ae60');
+  }
+}
+
 function resetPeriodicData(){
   const today=new Date().toDateString(),last=localStorage.getItem('hm_last_reset');
-  if(last!==today){Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&(k.includes('__Q__')||k.includes('_Q')))localStorage.removeItem(k);});localStorage.setItem('hm_last_reset',today);}
+  if(last!==today){
+    localStorage.setItem('hm_last_reset',today);
+    if(currentUser) purgeOldDailyCompletions();
+  }
 }
+
+// ── Veilleur minuit : vérifie toutes les 30 s si le jour a changé ──
+let _dailyWatcherDate=new Date().toISOString().slice(0,10);
+setInterval(function(){
+  const now=new Date().toISOString().slice(0,10);
+  if(now!==_dailyWatcherDate){
+    _dailyWatcherDate=now;
+    localStorage.setItem('hm_last_reset',new Date().toDateString());
+    purgeOldDailyCompletions();
+    _notifSentKeys.clear(); // réinitialiser les rappels pour le nouveau jour
+  }
+},30000);
 function setVH(){document.documentElement.style.setProperty('--vh',(window.innerHeight*0.01)+'px');}
 window.addEventListener('resize',setVH);setVH();
 // touchend supprimé — causait des blocages sur mobile
