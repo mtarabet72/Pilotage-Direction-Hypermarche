@@ -463,6 +463,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <button class="period-btn active" onclick="setDashPeriod('Q',this)">📅 Aujourd'hui</button>
     <button class="period-btn" onclick="setDashPeriod('H',this)">📅 Cette semaine</button>
     <button class="period-btn" onclick="setDashPeriod('M',this)">📅 Ce mois</button>
+    <button class="period-btn" onclick="setDashPeriod('T',this)">📊 Ce trimestre</button>
+    <button class="period-btn" onclick="setDashPeriod('A',this)">📅 Cette année</button>
     <span id="dash-period-label" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
   </div>
   <div id="dash-summary" class="summary-row"></div>
@@ -492,6 +494,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <button class="freq-btn" data-freq="Q" onclick="setFreq('Q')">Quotidien</button>
       <button class="freq-btn" data-freq="H" onclick="setFreq('H')">Hebdomadaire</button>
       <button class="freq-btn" data-freq="M" onclick="setFreq('M')">Mensuel</button>
+      <button class="freq-btn" data-freq="T" onclick="setFreq('T')">Trimestriel</button>
+      <button class="freq-btn" data-freq="A" onclick="setFreq('A')">Annuel</button>
       <button id="add-btn" onclick="toggleAddForm()" style="display:none">+ Ajouter tâche</button>
     </div>
     <div id="add-form">
@@ -511,6 +515,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
             <option value="Q">📅 Quotidien</option>
             <option value="H">📆 Hebdomadaire</option>
             <option value="M">🗓️ Mensuel</option>
+            <option value="T">📊 Trimestriel</option>
+            <option value="A">📅 Annuel</option>
           </select>
         </div>
         <!-- Assigné à -->
@@ -538,6 +544,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
           <button onclick="filterLibFreq('Q')" id="af-fq-q" style="padding:3px 10px;border-radius:20px;border:1.5px solid #e74c3c;background:#fff;color:#e74c3c;font-size:11px;font-weight:700;cursor:pointer;">📅 Quotidien</button>
           <button onclick="filterLibFreq('H')" id="af-fq-h" style="padding:3px 10px;border-radius:20px;border:1.5px solid #f39c12;background:#fff;color:#f39c12;font-size:11px;font-weight:700;cursor:pointer;">📆 Hebdo</button>
           <button onclick="filterLibFreq('M')" id="af-fq-m" style="padding:3px 10px;border-radius:20px;border:1.5px solid #27ae60;background:#fff;color:#27ae60;font-size:11px;font-weight:700;cursor:pointer;">🗓️ Mensuel</button>
+          <button onclick="filterLibFreq('T')" id="af-fq-t" style="padding:3px 10px;border-radius:20px;border:1.5px solid #8e44ad;background:#fff;color:#8e44ad;font-size:11px;font-weight:700;cursor:pointer;">📊 Trimestriel</button>
+          <button onclick="filterLibFreq('A')" id="af-fq-a" style="padding:3px 10px;border-radius:20px;border:1.5px solid #2c3e50;background:#fff;color:#2c3e50;font-size:11px;font-weight:700;cursor:pointer;">📅 Annuel</button>
         </div>
         <!-- Recherche -->
         <input type="text" id="af-lib-search" placeholder="🔍 Rechercher une tâche..." oninput="renderLibraryList()" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;margin-bottom:8px;">
@@ -594,6 +602,16 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
           <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="m-moment" value="SOIR"> 🌙 Soir <b style="color:#8e44ad">(avant 22h)</b></label>
         </div>
       </div>
+      <!-- Trimestriel -->
+      <div id="af-periode-t" style="margin-top:10px;display:none;flex-direction:column;gap:8px;background:#f5eef8;padding:10px 12px;border-radius:8px;border:1px solid #d7bde2;">
+        <div style="font-size:11px;font-weight:700;color:#8e44ad;">📊 Trimestriel — La tâche s'applique une fois par trimestre (T1, T2, T3, T4)</div>
+        <div style="font-size:11px;color:var(--muted);">La complétion est enregistrée pour le trimestre en cours.</div>
+      </div>
+      <!-- Annuel -->
+      <div id="af-periode-a" style="margin-top:10px;display:none;flex-direction:column;gap:8px;background:#eaf0f5;padding:10px 12px;border-radius:8px;border:1px solid #abc3d4;">
+        <div style="font-size:11px;font-weight:700;color:#2c3e50;">📅 Annuel — La tâche s'applique une fois par année</div>
+        <div style="font-size:11px;color:var(--muted);">La complétion est enregistrée pour l'année en cours.</div>
+      </div>
       <div class="af-row" style="margin-top:12px;">
         <button class="af-save" id="af-save-btn" onclick="document.getElementById('af-panel-library').style.display!='none'?saveCustomTaskFromLib():saveCustomTask()">✅ Enregistrer la tâche</button>
         <button class="af-cancel" onclick="closeAddForm()">Annuler</button>
@@ -603,6 +621,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <span class="fdot" style="background:#fdecea;color:#e74c3c">● Quotidien</span>
       <span class="fdot" style="background:#fef3e2;color:#f39c12">● Hebdomadaire</span>
       <span class="fdot" style="background:#eafaf1;color:#27ae60">● Mensuel</span>
+      <span class="fdot" style="background:#f5eef8;color:#8e44ad">● Trimestriel</span>
+      <span class="fdot" style="background:#eaf0f5;color:#2c3e50">● Annuel</span>
     </div>
     <div id="task-list"></div>
     <div id="progress-bottom">
@@ -624,6 +644,9 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <button class="period-btn active" id="res-btn-J" onclick="setResType('J')">📅 Journalier</button>
       <button class="period-btn" id="res-btn-C" onclick="setResType('C')">📈 Cumulé semaine</button>
       <button class="period-btn" id="res-btn-H" onclick="setResType('H')">📆 Résultat hebdomadaire</button>
+      <button class="period-btn" id="res-btn-Mens" onclick="setResType('Mens')">🗓️ Mensuel</button>
+      <button class="period-btn" id="res-btn-T" onclick="setResType('T')">📊 Trimestriel</button>
+      <button class="period-btn" id="res-btn-A" onclick="setResType('A')">📅 Annuel</button>
     </div>
   </div>
   <div id="results-content"><div style="text-align:center;padding:40px;color:var(--muted);">Sélectionnez une date.</div></div>
@@ -637,6 +660,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <div class="type-btn active" data-type="Q" onclick="setExportType('Q',this)"><div class="tb-icon">📅</div><div class="tb-label">Quotidien</div><div class="tb-desc">Tâches du jour</div></div>
       <div class="type-btn" data-type="H" onclick="setExportType('H',this)"><div class="tb-icon">📆</div><div class="tb-label">Hebdomadaire</div><div class="tb-desc">Tâches de la semaine</div></div>
       <div class="type-btn" data-type="M" onclick="setExportType('M',this)"><div class="tb-icon">🗓️</div><div class="tb-label">Mensuel</div><div class="tb-desc">Tâches du mois</div></div>
+      <div class="type-btn" data-type="T" onclick="setExportType('T',this)"><div class="tb-icon">📊</div><div class="tb-label">Trimestriel</div><div class="tb-desc">Tâches du trimestre</div></div>
+      <div class="type-btn" data-type="A" onclick="setExportType('A',this)"><div class="tb-icon">📅</div><div class="tb-label">Annuel</div><div class="tb-desc">Tâches de l'année</div></div>
       <div class="type-btn" data-type="C" onclick="setExportType('C',this)"><div class="tb-icon">🔎</div><div class="tb-label">Personnalisé</div><div class="tb-desc">Plage de dates</div></div>
     </div>
     <div id="daily-date-row" class="date-row" style="display:flex;">
@@ -976,8 +1001,8 @@ Object.defineProperty(window,'CONFIG_RAYONS',{get:()=>customRayons,set:(v)=>{cus
 // ══════════════════════════════════════════════════════════════
 // CONSTANTES & ÉTAT
 // ══════════════════════════════════════════════════════════════
-const FC={Q:"#e74c3c",H:"#f39c12",M:"#27ae60"};
-const FL={Q:"Quotidien",H:"Hebdomadaire",M:"Mensuel"};
+const FC={Q:"#e74c3c",H:"#f39c12",M:"#27ae60",T:"#8e44ad",A:"#2c3e50"};
+const FL={Q:"Quotidien",H:"Hebdomadaire",M:"Mensuel",T:"Trimestriel",A:"Annuel"};
 
 // Couleurs par rôle système
 const ROLE_COLORS={directeur:"#e63950",chef_secteur:"#2980b9",chef_rayon:"#27ae60"};
@@ -1533,6 +1558,8 @@ function getAllTasks(rid){
       if(!t.datesMois||t.datesMois.length===0)return true;
       return t.datesMois.map(d=>parseInt(d)).includes(todayDate);
     }
+    if(t.freq==='T')return true; // trimestriel = toujours visible
+    if(t.freq==='A')return true; // annuel = toujours visible
     return true;
   })];
 }
@@ -1555,7 +1582,9 @@ function getGlobalStats(freq="ALL"){
 function todayKey(){return new Date().toISOString().slice(0,10);}
 function weekKey(){const d=new Date(),j=new Date(d.getFullYear(),0,1);const w=Math.ceil(((d-j)/864e5+j.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,"0")}`;}
 function monthKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
-function periodKey(freq){if(freq==="Q")return todayKey();if(freq==="H")return weekKey();return monthKey();}
+function quarterKey(){const d=new Date();const q=Math.ceil((d.getMonth()+1)/3);return `${d.getFullYear()}-T${q}`;}
+function yearKey(){return `${new Date().getFullYear()}`;}
+function periodKey(freq){if(freq==="Q")return todayKey();if(freq==="H")return weekKey();if(freq==="M")return monthKey();if(freq==="T")return quarterKey();if(freq==="A")return yearKey();return monthKey();}
 // Détermine Matin/Soir à partir de l'heure réelle choisie (avant ou après midi),
 // et non plus par une comparaison stricte avec "12:00" qui faisait passer tout horaire
 // personnalisé (ex: 09:30) en "Soir" à tort.
@@ -1616,7 +1645,28 @@ function buildReportNoteHtml(rid,tid,freq){
 function countWords(str){
   return (str||'').trim().split(/\s+/).filter(Boolean).length;
 }
-function weekKeyForDate(s){const d=new Date(s+'T00:00:00'),j=new Date(d.getFullYear(),0,1),w=Math.ceil(((d-j)/864e5+j.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,'0')}`;}
+function periodKeyForDate(freq,dateStr){
+  if(freq==='Q')return dateStr;
+  if(freq==='H')return weekKeyForDate(dateStr);
+  if(freq==='M')return dateStr.slice(0,7);
+  if(freq==='T')return quarterKeyForDate(dateStr);
+  if(freq==='A')return yearKeyForDate(dateStr);
+  return dateStr;
+}
+// Vérifie si une tâche est complétée pour une DATE DONNÉE (utilise completions, source de vérité)
+function isTaskDoneForDate(rid,tid,freq,dateStr){
+  const targetPeriod=periodKeyForDate(freq,dateStr);
+  // Chercher dans completions : clé = uid__rid__tid__period
+  const suffix='__'+rid+'__'+tid+'__'+targetPeriod;
+  const found=Object.keys(completions).some(k=>k.endsWith(suffix)&&completions[k]);
+  if(found)return true;
+  // Fallback sur completionLog si completions vide (appareils non connectés)
+  return !!completionLog.find(e=>e.roleId===rid&&e.taskId===tid&&e.period===targetPeriod&&(freq===null||e.freq===freq));
+}
+function quarterKeyForDate(s){const d=new Date(s+'T00:00:00');const q=Math.ceil((d.getMonth()+1)/3);return `${d.getFullYear()}-T${q}`;}
+function yearKeyForDate(s){return s.slice(0,4);}
+function getQuarterDates(s){const d=new Date(s+'T00:00:00');const q=Math.ceil((d.getMonth()+1)/3);const startMonth=(q-1)*3;const start=new Date(d.getFullYear(),startMonth,1);const end=new Date(d.getFullYear(),startMonth+3,0);const r=[];for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1))r.push(dt.toISOString().slice(0,10));return r;}
+function getYearDates(s){const y=parseInt(s.slice(0,4));const r=[];for(let m=0;m<12;m++){r.push(`${y}-${String(m+1).padStart(2,'0')}`);}return r;}
 function getWeekDates(s){const d=new Date(s+'T00:00:00'),day=d.getDay(),diff=day===0?-6:1-day,mon=new Date(d);mon.setDate(d.getDate()+diff);const r=[];for(let i=0;i<7;i++){const x=new Date(mon);x.setDate(mon.getDate()+i);r.push(x.toISOString().slice(0,10));}return r;}
 function fmtDate(d){const days=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"],months=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;}
 function fmtDateStr(s){if(!s)return"";const[y,m,d]=s.split("-");return `${d}/${m}/${y}`;}
@@ -1657,7 +1707,7 @@ function renderDashboard(){
     const ownRole = currentUser.ownRoleId ? getAllRoles().find(r=>r.id===currentUser.ownRoleId) : null;
     const dashTitle = ownRole ? `${ownRole.icon} ${ownRole.label}` : '👤 Mes tâches';
     document.getElementById("dash-period-label").textContent =
-      dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:`📅 ${monthKey()}`;
+      dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:dashPeriod==="M"?`📅 ${monthKey()}`:dashPeriod==="T"?`📊 ${quarterKey()}`:dashPeriod==="A"?`📅 ${yearKey()}`:`📅 ${monthKey()}`;
 
     const activeVisRoles = visibleRoles.filter(r => getAllTasks(r.id).length > 0);
     const g = statsFor(activeVisRoles, dashPeriod);
@@ -1667,7 +1717,7 @@ function renderDashboard(){
     document.getElementById("dash-summary").innerHTML=`
       <div class="sum-card" style="border-top-color:#e63950"><div class="sc-val" style="color:#e63950">${g.pct}%</div><div class="sc-label">Mon avancement</div><div class="sc-sub" style="color:#e63950">${g.done}/${g.total} tâches</div></div>
       <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${visibleRoles.length}</div></div>
-      <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${g.total-g.done}</div><div class="sc-label">Tâches restantes</div><div class="sc-sub" style="color:#2980b9">${dashPeriod==="Q"?"Aujourd'hui":dashPeriod==="H"?"Cette semaine":"Ce mois"}</div></div>
+      <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${g.total-g.done}</div><div class="sc-label">Tâches restantes</div><div class="sc-sub" style="color:#2980b9">${dashPeriod==="Q"?"Aujourd'hui":dashPeriod==="H"?"Cette semaine":dashPeriod==="T"?"Ce trimestre":dashPeriod==="A"?"Cette année":"Ce mois"}</div></div>
       <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeVisRoles.length}</div></div>`;
 
     // Cards uniquement des rôles accessibles
@@ -1725,7 +1775,7 @@ function renderDashboard(){
   const g = statsFor(activeRoles, dashPeriod);
   const gc = statsFor(activeRoles.filter(r=>r.secteur==='Commercial'), dashPeriod);
   const gs = statsFor(activeRoles.filter(r=>r.secteur==='Services'), dashPeriod);
-  const pl=dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:`📅 ${monthKey()}`;
+  const pl=dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:dashPeriod==="M"?`📅 ${monthKey()}`:dashPeriod==="T"?`📊 ${quarterKey()}`:dashPeriod==="A"?`📅 Année ${yearKey()}`:`📅 ${monthKey()}`;
   document.getElementById("dash-period-label").textContent=pl;
   const rd=activeRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
   document.getElementById("dash-summary").innerHTML=`
@@ -2019,6 +2069,8 @@ function updatePeriodeFields(){
   document.getElementById("af-periode-q").style.display=freq==="Q"?"flex":"none";
   document.getElementById("af-periode-h").style.display=freq==="H"?"flex":"none";
   document.getElementById("af-periode-m").style.display=freq==="M"?"flex":"none";
+  const tEl=document.getElementById("af-periode-t");if(tEl)tEl.style.display=freq==="T"?"flex":"none";
+  const aEl=document.getElementById("af-periode-a");if(aEl)aEl.style.display=freq==="A"?"flex":"none";
 }
 function saveCustomTask(){
   if(!isDirecteur()){showToast('Accès réservé au Directeur','#e74c3c');return;}
@@ -2043,6 +2095,10 @@ function saveCustomTask(){
     deadline=moment==="MATIN"?"12:00":"22:00";
     periodeNote=`🗓️ ${datePrec||"À définir"} — ${moment} avant ${moment==="MATIN"?"12h":"22h"}`;
     datesMois=datePrec?datePrec.split(",").map(d=>d.trim()):[];
+  } else if(freq==="T"){
+    periodeNote="📊 Trimestriel";
+  } else if(freq==="A"){
+    periodeNote="📅 Annuel";
   }
 
   const task={id,label,freq,note:periodeNote,deadline,jours,datesMois,assignedTo,createdBy:currentUser.id,createdAt:new Date().toISOString()};
@@ -2069,7 +2125,7 @@ function editCustomTask(id){
   const tasks=customTasks[currentRoleId]||[];
   const t=tasks.find(x=>x.id===id);
   if(!t)return;
-  const freqOpts=['Q','H','M'].map(f=>`<option value="${f}"${t.freq===f?' selected':''}>${FL[f]}</option>`).join('');
+  const freqOpts=['Q','H','M','T','A'].map(f=>`<option value="${f}"${t.freq===f?' selected':''}>${FL[f]}</option>`).join('');
   const userOpts='<option value="">-- Aucun (broadcast) --</option>'+usersData.filter(u=>u.active&&u.id!==currentUser.id).map(u=>`<option value="${u.id}"${t.assignedTo===u.id?' selected':''}>${u.name} (@${u.username})</option>`).join('');
   document.getElementById('modal-title').textContent='✏️ Modifier la tâche';
   document.getElementById('modal-body').innerHTML=`
@@ -2485,7 +2541,7 @@ function openEditModal(roleId,taskId,isCustom){
   document.getElementById('modal-body').innerHTML=`
     <div class="modal-field"><label>Libellé</label><input type="text" id="me-label" value="${task.label||''}"></div>
     <div class="modal-field"><label>Note / Consigne</label><input type="text" id="me-note" value="${task.note||''}"></div>
-    <div class="modal-field"><label>Fréquence</label><select id="me-freq"><option value="Q"${task.freq==='Q'?' selected':''}>Quotidien</option><option value="H"${task.freq==='H'?' selected':''}>Hebdomadaire</option><option value="M"${task.freq==='M'?' selected':''}>Mensuel</option></select></div>`;
+    <div class="modal-field"><label>Fréquence</label><select id="me-freq"><option value="Q"${task.freq==='Q'?' selected':''}>Quotidien</option><option value="H"${task.freq==='H'?' selected':''}>Hebdomadaire</option><option value="M"${task.freq==='M'?' selected':''}>Mensuel</option><option value="T"${task.freq==='T'?' selected':''}>Trimestriel</option><option value="A"${task.freq==='A'?' selected':''}>Annuel</option></select></div>`;
   document.getElementById('modal-save-btn').textContent='Enregistrer';
   modalSaveCallback=()=>{
     const label=document.getElementById('me-label').value.trim();if(!label){alert('Libellé requis.');return;}
@@ -2705,8 +2761,9 @@ function deleteUser(userId){
 // ══════════════════════════════════════════════════════════════
 function setResType(type){
   resType=type;
-  ['J','C','H'].forEach(t=>{const btn=document.getElementById(`res-btn-${t}`);if(btn)btn.classList.toggle('active',t===type);});
+  ['J','C','H','Mens','T','A'].forEach(t=>{const btn=document.getElementById(`res-btn-${t}`);if(btn)btn.classList.toggle('active',t===type);});
   renderResults();
+}
 }
 function renderResults(){
   const dateVal=document.getElementById('res-date').value;
@@ -2714,24 +2771,24 @@ function renderResults(){
   if(!dateVal){content.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted);">Sélectionnez une date.</div>`;return;}
   if(resType==='J')content.innerHTML=buildDailyResults(dateVal);
   else if(resType==='C')content.innerHTML=buildCumulResults(dateVal);
-  else content.innerHTML=buildWeeklyResults(dateVal);
+  else if(resType==='H')content.innerHTML=buildWeeklyResults(dateVal);
+  else if(resType==='Mens')content.innerHTML=buildMonthlyResults(dateVal);
+  else if(resType==='T')content.innerHTML=buildQuarterlyResults(dateVal);
+  else if(resType==='A')content.innerHTML=buildAnnualResults(dateVal);
 }
 function buildDailyResults(dateStr){
   const dayLabel=fmtDate(new Date(dateStr+'T00:00:00'));
-  // Filtrer le log par date ET dédupliquer (garder la dernière entrée par roleId+taskId)
-  const rawLogs=completionLog.filter(e=>e.freq==='Q'&&e.period===dateStr);
-  const logsMap=new Map(); // clé: roleId+'__'+taskId => dernière entrée
-  rawLogs.forEach(e=>{ logsMap.set(e.roleId+'__'+e.taskId, e); });
-  const logs=[...logsMap.values()];
   let totalQ=0,doneCount=0;
   const roleStats={};
   getAllRoles().forEach(r=>{
     const rTasks=getAllTasks(r.id).filter(t=>t.freq==='Q');
-    const rLogs=logs.filter(e=>e.roleId===r.id);
-    // Compter: pour chaque tâche existante, est-elle dans le log?
+    // Utiliser completions (source de vérité) + fallback completionLog
     let rd=0;
-    rTasks.forEach(t=>{ if(rLogs.find(e=>e.taskId===t.id)) rd++; });
-    roleStats[r.id]={tasks:rTasks, logs:rLogs, done:rd};
+    const rLogs=completionLog.filter(e=>e.roleId===r.id&&e.freq==='Q'&&e.period===dateStr);
+    rTasks.forEach(t=>{
+      if(isTaskDoneForDate(r.id,t.id,'Q',dateStr)) rd++;
+    });
+    roleStats[r.id]={tasks:rTasks,logs:rLogs,done:rd};
     totalQ+=rTasks.length; doneCount+=rd;
   });
   const pct=totalQ?Math.round(doneCount/totalQ*100):0;
@@ -2743,8 +2800,8 @@ function buildDailyResults(dateStr){
     const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
     // Détail des tâches avec horaire
     const tasksDetail=rTasks.map(t=>{
-      const logE=rLogs.find(e=>e.taskId===t.id);
-      const done=!!logE;
+      const done=isTaskDoneForDate(r.id,t.id,'Q',dateStr);
+      const logE=rLogs.find(e=>e.taskId===t.id); // pour timestamp uniquement
       let horaireHtml='';
       if(t.deadline){
         const _dpiD=deadlinePeriodInfo(t.deadline);
@@ -2797,15 +2854,12 @@ function buildCumulResults(dateStr){
 }
 function buildWeeklyResults(dateStr){
   const weekStr=weekKeyForDate(dateStr);const weekDates=getWeekDates(dateStr);const today=todayKey();
-  // Dédupliquer le log hebdo par roleId+taskId
-  const rawHLogs=completionLog.filter(e=>e.freq==='H'&&e.period===weekStr);
-  const hLogsMap=new Map();rawHLogs.forEach(e=>{hLogsMap.set(e.roleId+'__'+e.taskId,e);});
-  const hLogs=[...hLogsMap.values()];
+  // Tâches H : utiliser completions comme source de vérité
   let totalH=0,doneH=0;
   getAllRoles().forEach(r=>{
     const rH=getAllTasks(r.id).filter(t=>t.freq==='H');
     totalH+=rH.length;
-    rH.forEach(t=>{if(hLogs.find(e=>e.roleId===r.id&&e.taskId===t.id))doneH++;});
+    rH.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'H',dateStr))doneH++;});
   });
   const pctH=totalH?Math.round(doneH/totalH*100):0;
   let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
@@ -2826,15 +2880,15 @@ function buildWeeklyResults(dateStr){
     ${(()=>{
       let hDetailHtml='';
       getAllRoles().forEach(r=>{
-        const rHLogs=hLogs.filter(e=>e.roleId===r.id);
+        const rHLogs=completionLog.filter(e=>e.roleId===r.id&&e.freq==='H'&&e.period===weekStr);
         const rHTasks=getAllTasks(r.id).filter(t=>t.freq==='H');
         if(!rHTasks.length)return;
-        // Compter uniquement les tâches existantes trouvées dans le log
-        let rd=0;rHTasks.forEach(t=>{if(rHLogs.find(e=>e.taskId===t.id))rd++;});
+        let rd=0;rHTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'H',dateStr))rd++;});
         const totalR=rHTasks.length;
         const rPct=totalR?Math.round(rd/totalR*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
         const tasksHtml=rHTasks.map(t=>{
-          const logE=rHLogs.find(e=>e.taskId===t.id);const done=!!logE;
+          const done=isTaskDoneForDate(r.id,t.id,'H',dateStr);
+          const logE=rHLogs.find(e=>e.taskId===t.id); // pour timestamp uniquement
           let hBadge='';
           if(t.deadline){
             const labelH=`${deadlinePeriodInfo(t.deadline).emoji} ${deadlinePeriodInfo(t.deadline).label}`;
@@ -2858,6 +2912,148 @@ function buildWeeklyResults(dateStr){
   </div>`;
 }
 
+// ─── Résultats Mensuel ───────────────────────────────────────
+function buildMonthlyResults(dateStr){
+  const monthStr=dateStr.slice(0,7);
+  const d=new Date(dateStr+'T00:00:00');
+  const monthLabel=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const today=todayKey();
+  // Tâches M
+  let totalM=0,doneM=0;
+  getAllRoles().forEach(r=>{
+    const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
+    totalM+=rM.length;
+    rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',dateStr))doneM++;});
+  });
+  const pctM=totalM?Math.round(doneM/totalM*100):0;
+  // Tâches Q : nbr de jours du mois passés
+  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  const daysInMonth=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  let daysHtml='',totalDoneQ=0,totalPossQ=0;
+  for(let i=1;i<=daysInMonth;i++){
+    const dStr=`${monthStr}-${String(i).padStart(2,'0')}`;
+    const isFuture=dStr>today;
+    const done=completionLog.filter(e=>e.freq==='Q'&&e.period===dStr).length;
+    let doneCnt=0;if(!isFuture){getAllRoles().forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
+    const pct=totalQ?Math.round((isFuture?0:doneCnt)/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
+    daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:90px;">${fmtDateStr(dStr)}${dStr===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
+  }
+  const gPct=Math.round(((totalPossQ?totalDoneQ/totalPossQ:0)+(totalM?doneM/totalM:0))/2*100);
+  const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
+  // Détail tâches M par rôle
+  let mDetailHtml='';
+  getAllRoles().forEach(r=>{
+    const rMTasks=getAllTasks(r.id).filter(t=>t.freq==='M');if(!rMTasks.length)return;
+    let rd=0;rMTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',dateStr))rd++;});
+    const rPct=rMTasks.length?Math.round(rd/rMTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
+    const tasksHtml=rMTasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'M',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    mDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rMTasks.length})</span></div>${tasksHtml}</div>`;
+  });
+  return `<div class="res-card"><h3>🗓️ Mensuel — ${monthLabel}</h3>
+    <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Score global</div></div><div class="res-stat"><div class="res-stat-val" style="color:#27ae60">${pctM}%</div><div class="res-stat-lbl">Tâches Mensuel (M)</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2980b9">${totalDoneQ}</div><div class="res-stat-lbl">Tâches Q réalisées</div></div><div class="res-stat"><div class="res-stat-val" style="color:#27ae60">${doneM}/${totalM}</div><div class="res-stat-lbl">Tâches M réalisées</div></div></div>
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Détail journalier</div>${daysHtml}
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tâches mensuelles par fonction</div>
+    ${mDetailHtml||`<div style="color:var(--muted);font-size:12px;padding:8px 0;">Aucune tâche mensuelle enregistrée.</div>`}
+  </div>`;
+}
+
+// ─── Résultats Trimestriel ───────────────────────────────────
+function buildQuarterlyResults(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const q=Math.ceil((d.getMonth()+1)/3);
+  const qStr=quarterKeyForDate(dateStr);
+  const today=todayKey();
+  const months=getYearDates(dateStr).filter(m=>Math.ceil(parseInt(m.slice(5,7))/3)===q);
+  const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  // Tâches T
+  let totalT=0,doneT=0;
+  getAllRoles().forEach(r=>{
+    const rT=getAllTasks(r.id).filter(t=>t.freq==='T');
+    totalT+=rT.length;
+    rT.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'T',dateStr))doneT++;});
+  });
+  // Tâches M par mois du trimestre
+  let totalMDone=0,totalMPoss=0,monthsHtml='';
+  months.forEach(m=>{
+    const mDate=m+'-15'; // date représentative du mois
+    const isFuture=m>today.slice(0,7);
+    let mDone=0,mTotal=0;
+    getAllRoles().forEach(r=>{const rM=getAllTasks(r.id).filter(t=>t.freq==='M');mTotal+=rM.length;if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',mDate))mDone++;});});
+    const pct=mTotal?Math.round(mDone/mTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
+    if(!isFuture){totalMDone+=mDone;totalMPoss+=mTotal;}
+    monthsHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:100px;">${monthNames[parseInt(m.slice(5,7))]}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
+  });
+  const pctT=totalT?Math.round(doneT/totalT*100):0;
+  const pctM=totalMPoss?Math.round(totalMDone/totalMPoss*100):0;
+  const gPct=Math.round(((totalT?doneT/totalT:0)+(totalMPoss?totalMDone/totalMPoss:0))/2*100);
+  const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
+  // Détail tâches T
+  let tDetailHtml='';
+  getAllRoles().forEach(r=>{
+    const rTTasks=getAllTasks(r.id).filter(t=>t.freq==='T');if(!rTTasks.length)return;
+    let rd=0;rTTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'T',dateStr))rd++;});
+    const rPct=rTTasks.length?Math.round(rd/rTTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
+    const tasksHtml=rTTasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'T',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f5eef8':'#f9f9fb'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#6c3483':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    tDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rTTasks.length})</span></div>${tasksHtml}</div>`;
+  });
+  return `<div class="res-card"><h3>📊 Trimestriel — T${q} ${d.getFullYear()}</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">${months.map(m=>monthNames[parseInt(m.slice(5,7))]).join(' · ')}</div>
+    <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Score global</div></div><div class="res-stat"><div class="res-stat-val" style="color:#8e44ad">${pctT}%</div><div class="res-stat-lbl">Tâches Trimestrielles</div></div><div class="res-stat"><div class="res-stat-val" style="color:#27ae60">${pctM}%</div><div class="res-stat-lbl">Tâches Mensuelles</div></div><div class="res-stat"><div class="res-stat-val" style="color:#8e44ad">${doneT}/${totalT}</div><div class="res-stat-lbl">Tâches T réalisées</div></div></div>
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Progression mensuelle</div>${monthsHtml}
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tâches trimestrielles par fonction</div>
+    ${tDetailHtml||`<div style="color:var(--muted);font-size:12px;padding:8px 0;">Aucune tâche trimestrielle. Créez-en dans l'onglet Tâches.</div>`}
+  </div>`;
+}
+
+// ─── Résultats Annuel ────────────────────────────────────────
+function buildAnnualResults(dateStr){
+  const year=parseInt(dateStr.slice(0,4));
+  const today=todayKey();
+  const months=getYearDates(dateStr);
+  const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  // Tâches A
+  let totalA=0,doneA=0;
+  getAllRoles().forEach(r=>{
+    const rA=getAllTasks(r.id).filter(t=>t.freq==='A');
+    totalA+=rA.length;
+    rA.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'A',dateStr))doneA++;});
+  });
+  // Tâches M/T par mois
+  let monthsHtml='',totalMDone=0,totalMPoss=0;
+  months.forEach(m=>{
+    const mDate=m+'-15';
+    const isFuture=m>today.slice(0,7);
+    let mDone=0,mTotal=0;
+    getAllRoles().forEach(r=>{
+      const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
+      mTotal+=rM.length;
+      if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',mDate))mDone++;});
+    });
+    const pct=mTotal?Math.round(mDone/mTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
+    if(!isFuture){totalMDone+=mDone;totalMPoss+=mTotal;}
+    monthsHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:100px;">${monthNames[parseInt(m.slice(5,7))]}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
+  });
+  const pctA=totalA?Math.round(doneA/totalA*100):0;
+  const pctM=totalMPoss?Math.round(totalMDone/totalMPoss*100):0;
+  const gPct=Math.round(((totalA?doneA/totalA:0)+(totalMPoss?totalMDone/totalMPoss:0))/2*100);
+  const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
+  // Détail tâches A par rôle
+  let aDetailHtml='';
+  getAllRoles().forEach(r=>{
+    const rATasks=getAllTasks(r.id).filter(t=>t.freq==='A');if(!rATasks.length)return;
+    let rd=0;rATasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'A',dateStr))rd++;});
+    const rPct=rATasks.length?Math.round(rd/rATasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
+    const tasksHtml=rATasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'A',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#eaf0f5':'#f5f5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a3a4a':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    aDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rATasks.length})</span></div>${tasksHtml}</div>`;
+  });
+  return `<div class="res-card"><h3>📅 Annuel — ${year}</h3>
+    <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Score global</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2c3e50">${pctA}%</div><div class="res-stat-lbl">Tâches Annuelles</div></div><div class="res-stat"><div class="res-stat-val" style="color:#27ae60">${pctM}%</div><div class="res-stat-lbl">Tâches Mensuelles</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2c3e50">${doneA}/${totalA}</div><div class="res-stat-lbl">Tâches A réalisées</div></div></div>
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Progression par mois</div>${monthsHtml}
+    <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tâches annuelles par fonction</div>
+    ${aDetailHtml||`<div style="color:var(--muted);font-size:12px;padding:8px 0;">Aucune tâche annuelle. Créez-en dans l'onglet Tâches.</div>`}
+  </div>`;
+}
+
 // ══════════════════════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════════════════════
@@ -2875,6 +3071,8 @@ function setExportType(t,btn){
       if(t==="Q")dlbl.textContent="📅 Date du rapport";
       else if(t==="H")dlbl.textContent="📅 Semaine du";
       else if(t==="M")dlbl.textContent="📅 Mois de";
+      else if(t==="T")dlbl.textContent="📊 Trimestre du";
+      else if(t==="A")dlbl.textContent="📅 Année de";
     }
   }
   document.getElementById("custom-date-row").style.display=t==="C"?"flex":"none";
@@ -2904,6 +3102,8 @@ function getExportPeriodLabel(){
   if(exportType==="Q")return `Quotidien — ${fmtDate(d)}`;
   if(exportType==="H")return `Hebdomadaire — Semaine ${weekKeyForDate(dv)}`;
   if(exportType==="M")return `Mensuel — ${d.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}`;
+  if(exportType==="T"){const q=Math.ceil((d.getMonth()+1)/3);return `Trimestriel — T${q} ${d.getFullYear()}`;}
+  if(exportType==="A")return `Annuel — ${d.getFullYear()}`;
   const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;
   return `Personnalisé — du ${fmtDateStr(f)||"…"} au ${fmtDateStr(t)||"…"}`;
 }
@@ -2911,11 +3111,17 @@ function buildReportHTML(forPrint=false){
   const roles=getExportRoles(),showDone=document.getElementById("opt-show-done").checked,showTodo=document.getElementById("opt-show-todo").checked,showNote=document.getElementById("opt-show-note").checked;
   const freq=getExportFreq(),periodLabel=getExportPeriodLabel(),now=new Date().toLocaleString("fr-FR");
   const chosenDate=getExportDateVal();
-  function _tp(fr){if(fr==='Q')return chosenDate;if(fr==='H')return weekKeyForDate(chosenDate);if(fr==='M')return chosenDate.slice(0,7);return chosenDate;}
+  function _tp(fr){if(fr==='Q')return chosenDate;if(fr==='H')return weekKeyForDate(chosenDate);if(fr==='M')return chosenDate.slice(0,7);if(fr==='T')return quarterKeyForDate(chosenDate);if(fr==='A')return yearKeyForDate(chosenDate);return chosenDate;}
   let logEntries=null;
   if(exportType==="C"){const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;if(f&&t)logEntries=completionLog.filter(e=>e.period>=f&&e.period<=t);}
-  else{const tp=_tp(freq);logEntries=completionLog.filter(e=>e.period===tp&&(freq===null||e.freq===freq));}
-  function _isDoneInLog(rid,tid,fr){if(!logEntries)return isTaskDone(rid,tid,fr);return !!logEntries.find(e=>e.roleId===rid&&e.taskId===tid);}
+  // _isDoneInLog : utilise completions (source de vérité) + fallback log pour mode C
+  function _isDoneInLog(rid,tid,fr){
+    if(exportType==="C"){
+      if(!logEntries)return isTaskDone(rid,tid,fr);
+      return !!logEntries.find(e=>e.roleId===rid&&e.taskId===tid);
+    }
+    return isTaskDoneForDate(rid,tid,fr,chosenDate);
+  }
   let body="",totalDone=0,totalTasks=0;
   roles.forEach(r=>{
     let tasks=getAllTasks(r.id);if(freq)tasks=tasks.filter(t=>t.freq===freq);
@@ -3835,8 +4041,8 @@ function selectLibTask(taskId, catId){
   _libSelectedTask = {...task, _cat:catId};
   // Show selected
   const sel = document.getElementById('af-lib-selected');
-  const FL_LIB = {Q:'📅 Quotidien',H:'📆 Hebdomadaire',M:'🗓️ Mensuel'};
-  const FC_LIB = {Q:'#e74c3c',H:'#f39c12',M:'#27ae60'};
+  const FL_LIB = {Q:'📅 Quotidien',H:'📆 Hebdomadaire',M:'🗓️ Mensuel',T:'📊 Trimestriel',A:'📅 Annuel'};
+  const FC_LIB = {Q:'#e74c3c',H:'#f39c12',M:'#27ae60',T:'#8e44ad',A:'#2c3e50'};
   if(sel){
     sel.style.display='block';
     document.getElementById('af-lib-sel-label').textContent = task.label;
@@ -3868,6 +4074,10 @@ function saveCustomTaskFromLib(){
     deadline=moment==='MATIN'?'12:00':'22:00';
     periodeNote='🗓️ '+(datePrec||'À définir')+' — '+moment+' avant '+(moment==='MATIN'?'12h':'22h');
     datesMois=datePrec?datePrec.split(',').map(d=>d.trim()):[];
+  } else if(freq==='T'){
+    periodeNote='📊 Trimestriel';
+  } else if(freq==='A'){
+    periodeNote='📅 Annuel';
   }
   const task = {
     id: 'c_lib_'+Date.now(),
