@@ -673,7 +673,24 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
 <!-- ══════════════ PARAMÈTRES ══════════════ -->
 <div id="view-settings" class="view">
 
-  <!-- Supabase Config -->
+  <!-- Notifications -->
+  <div class="settings-card" style="border-left:4px solid #e67e22;">
+    <h3>🔔 Notifications</h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      Activez les notifications pour recevoir des alertes sur votre appareil même si l'app est en arrière-plan.
+    </div>
+    <div id="notif-status-bar" style="padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:12px;background:#fef9f0;color:#e67e22;">
+      🔔 Statut : en attente…
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-primary" onclick="enableNotifications()" style="background:#e67e22;border-color:#e67e22;color:#fff;">🔔 Activer les notifications</button>
+      <button class="btn-secondary" onclick="testNotification()">🧪 Tester</button>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted);">
+      • <b>Utilisateurs</b> : alerte 5 min avant la deadline d'une tâche non effectuée.<br>
+      • <b>Admin</b> : notification dès qu'une tâche est cochée par un collaborateur.
+    </div>
+  </div>
   <div class="settings-card" id="firebase-config-card" style="border-left:4px solid #3ecf8e;">
     <h3>⚡ Configuration Supabase (Suivi Live)</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
@@ -1347,7 +1364,6 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderRayonsList(); renderSelectRayon();
-        purgeOldDailyCompletions(true); // nettoyer les coches d'hier avant rendu
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     } else {
@@ -1392,7 +1408,6 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderSelectRayon();
-        purgeOldDailyCompletions(true); // nettoyer les coches d'hier avant rendu
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
     }
@@ -1407,10 +1422,14 @@ function onLoginSuccess(){
   document.getElementById("res-date").value=today;
   renderDashboard();
   renderExportScope();
+  // ── Notifications ──
+  updateNotifStatusBar();
+  if(!isDirecteur() && Notification.permission==='granted') startNotifWatcher();
 }
 function doLogout(){
   currentUser=null;
   sessionStorage.removeItem('hm_session');
+  if(_notifWatcherInterval){ clearInterval(_notifWatcherInterval); _notifWatcherInterval=null; }
   document.getElementById('login-username').value='';
   document.getElementById('login-password').value='';
   showLoginScreen();
@@ -1485,7 +1504,7 @@ function showView(v){
   if(v==="tasks"){if(viewMode==='rayon'&&rayonActif){renderSidebar();afficherRayon(rayonActif);}else{renderSidebar();renderTaskView();}}
   if(v==="results")renderResults();
   if(v==="export")renderExportScope();
-  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();}
+  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();updateNotifStatusBar();}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1618,6 +1637,127 @@ function fmtDateStr(s){if(!s)return"";const[y,m,d]=s.split("-");return `${d}/${m
 function showToast(msg,color='#1a1f2e'){
   const t=document.getElementById("toast");t.textContent=msg;t.style.background=color;
   t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// SYSTÈME DE NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════
+
+// ── UI : activer notifications + status bar ──
+function updateNotifStatusBar(){
+  const bar=document.getElementById('notif-status-bar');
+  if(!bar)return;
+  if(!('Notification' in window)){
+    bar.style.background='#fdecea';bar.style.color='#c0392b';
+    bar.textContent='❌ Notifications non supportées par ce navigateur.';return;
+  }
+  if(Notification.permission==='granted'){
+    bar.style.background='#eafaf1';bar.style.color='#1a7a40';
+    bar.textContent='✅ Notifications activées — vous recevrez des alertes sur cet appareil.';
+  } else if(Notification.permission==='denied'){
+    bar.style.background='#fdecea';bar.style.color='#c0392b';
+    bar.textContent='🚫 Notifications bloquées — autorisez-les dans les paramètres du navigateur.';
+  } else {
+    bar.style.background='#fef9f0';bar.style.color='#e67e22';
+    bar.textContent='🔔 Notifications non activées — cliquez sur "Activer" pour commencer.';
+  }
+}
+function enableNotifications(){
+  if(!('Notification' in window)){showToast('❌ Navigateur non compatible','#e74c3c');return;}
+  if(Notification.permission==='granted'){showToast('✅ Notifications déjà activées','#27ae60');updateNotifStatusBar();return;}
+  if(Notification.permission==='denied'){showToast('🚫 Bloquées — modifiez les paramètres du navigateur','#e74c3c');updateNotifStatusBar();return;}
+  Notification.requestPermission().then(p=>{
+    updateNotifStatusBar();
+    if(p==='granted'){
+      showToast('✅ Notifications activées !','#27ae60');
+      if(!isDirecteur()) startNotifWatcher();
+      // Notif de confirmation
+      setTimeout(()=>sendBrowserNotif('✅ Pilotage Hypermarché','Notifications activées avec succès !',null,'hm_test_ok'),500);
+    } else {
+      showToast('🚫 Notifications refusées','#e74c3c');
+    }
+  });
+}
+function testNotification(){
+  if(Notification.permission!=='granted'){showToast('⚠️ Activez les notifications d\'abord','#e67e22');return;}
+  if(isDirecteur()){
+    sendBrowserNotif('✅ Test Admin — Tâche cochée','Jean Martin : Contrôle ouverture caisses · 08:32',null,'hm_test_admin');
+    showToast('🧪 Notification test envoyée','#2980b9');
+  } else {
+    sendBrowserNotif('⏰ Test Rappel — Tâche à faire','Relevé températures frais\nDélai : avant 12:00 (5 min)',null,'hm_test_user');
+    showToast('🧪 Notification test envoyée','#2980b9');
+  }
+}
+
+function requestNotifPermission(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='granted') return; // déjà OK, pas de popup intrusive
+  // Ne pas demander automatiquement — l'user choisit depuis Paramètres
+}
+
+// ── Envoyer une notification browser native ──
+function sendBrowserNotif(title, body, icon, tag){
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  try{
+    new Notification(title,{
+      body, icon: icon||'./icons/icon-192.png',
+      tag: tag||('hm_notif_'+Date.now()),
+      badge:'./icons/icon-192.png',
+      vibrate:[200,100,200]
+    });
+  }catch(e){}
+}
+
+// ── Stocker les notifs déjà envoyées (éviter doublons) ──
+const _notifSentSet = new Set();
+
+// ── Watcher tâches utilisateur : alerte 5 min avant deadline ──
+let _notifWatcherInterval = null;
+function startNotifWatcher(){
+  if(_notifWatcherInterval) clearInterval(_notifWatcherInterval);
+  _notifWatcherInterval = setInterval(()=>{
+    if(!currentUser || isDirecteur()) return;
+    const now = new Date();
+    const hNow = now.getHours()*60 + now.getMinutes();
+    const todayStr = now.toISOString().slice(0,10);
+
+    getAllRoles().forEach(role=>{
+      if(!canEditRole(role.id)) return;
+      getAllTasks(role.id).filter(t=>t.freq==='Q'&&t.deadline).forEach(task=>{
+        const [dh,dm] = task.deadline.split(':').map(Number);
+        const deadlineMin = dh*60+dm;
+        const diff = deadlineMin - hNow; // minutes restantes
+        const notifKey = `${todayStr}__${role.id}__${task.id}__deadline5`;
+        const alreadyDone = isTaskDone(role.id, task.id, task.freq);
+
+        // Notification 5 min avant deadline si tâche non faite
+        if(diff>=0 && diff<=5 && !alreadyDone && !_notifSentSet.has(notifKey)){
+          _notifSentSet.add(notifKey);
+          sendBrowserNotif(
+            '⏰ Tâche à faire maintenant !',
+            `${task.label}\nDélai : avant ${task.deadline} (${diff<=0?'maintenant':diff+' min'})`,
+            null, notifKey
+          );
+          showToast(`⏰ Rappel : "${task.label.substring(0,35)}" avant ${task.deadline}`,'#e67e22');
+        }
+      });
+    });
+  }, 30000); // vérification toutes les 30 secondes
+}
+
+// ── Notification admin : tâche cochée par un utilisateur ──
+// Appelé depuis le listener hm_events Realtime
+function notifyAdminTaskDone(event){
+  if(!event||!isDirecteur()) return;
+  const notifKey = `admin_done__${event.uid}__${event.taskId}__${event.period}`;
+  if(_notifSentSet.has(notifKey)) return;
+  _notifSentSet.add(notifKey);
+  const statusIcon = event.statut==='VERT' ? '✅' : '⚠️';
+  sendBrowserNotif(
+    `${statusIcon} Tâche réalisée — ${event.userName||'?'}`,
+    `${event.taskLabel||'?'}\n${event.roleLabel||''} · ${event.heure||''}`,
+    null, notifKey
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3443,7 +3583,10 @@ async function initSupabase(cfg){
           .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
         if(recent){
           const age=(Date.now()-new Date(recent.completedAt).getTime())/1000;
-          if(age<8) showToast('\u2705 '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
+          if(age<8){
+            showToast('\u2705 '+(recent.userName||'?')+' : '+(recent.taskLabel||'').substring(0,35), recent.couleur||'#27ae60');
+            notifyAdminTaskDone(recent);
+          }
         }
       }
     });
@@ -4153,75 +4296,10 @@ function renderLivePanel(snap,updatedAt,byUser){
 // ══════════════════════════════════════════════════════════════
 // RESET PÉRIODIQUE & INIT
 // ══════════════════════════════════════════════════════════════
-
-// Purge en mémoire + localStorage + Supabase toutes les completions
-// quotidiennes (clé se terminant par YYYY-MM-DD) qui ne sont PAS d'aujourd'hui.
-function purgeOldDailyCompletions(silent){
-  const today=todayKey(); // ex: "2025-06-18"
-  // Les clés completions quotidiennes finissent par __YYYY-MM-DD
-  // Les hebdo finissent par __YYYY-Wxx, les mensuelles par __YYYY-MM
-  const keysToDelete=Object.keys(completions).filter(k=>{
-    const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
-    return m && m[1]!==today;
-  });
-  if(keysToDelete.length===0)return;
-
-  keysToDelete.forEach(k=>delete completions[k]);
-
-  // Persister dans localStorage
-  const uid=currentUser?currentUser.id:'guest';
-  try{
-    localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
-    localStorage.setItem('hm_comp',JSON.stringify(completions));
-  }catch(e){}
-
-  // Persister dans Supabase (source de vérité)
-  if(_sbClient&&_fbConnected&&currentUser){
-    _sb.set('hm_completions',uid,completions).catch(()=>{});
-    // Admin : écraser aussi toutes les lignes des autres users
-    if(isDirecteur()){
-      _sb.getAll('hm_completions').then(rows=>{
-        if(!rows)return;
-        rows.forEach(r=>{
-          if(!r.data)return;
-          const cleaned={};
-          Object.keys(r.data).forEach(k=>{
-            const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
-            if(!m||m[1]===today) cleaned[k]=r.data[k]; // garder non-quotidien ET aujourd'hui
-          });
-          const rowUid=r.user_id||r.key;
-          if(rowUid!==uid) _sb.set('hm_completions',rowUid,cleaned).catch(()=>{});
-        });
-      }).catch(()=>{});
-    }
-  }
-
-  console.log(`[Reset quotidien] ${keysToDelete.length} completion(s) purgée(s) — date conservée: ${today}`);
-  if(!silent&&currentUser){
-    renderTasks(); renderProgressBar(); renderDashboard();
-    showToast('🔄 Nouvelles tâches du jour — compteurs remis à zéro','#27ae60');
-  }
-}
-
 function resetPeriodicData(){
   const today=new Date().toDateString(),last=localStorage.getItem('hm_last_reset');
-  if(last!==today){
-    localStorage.setItem('hm_last_reset',today);
-    // Purge immédiate si déjà connecté (ex: refresh en début de journée)
-    if(currentUser) purgeOldDailyCompletions();
-  }
+  if(last!==today){Object.keys(localStorage).forEach(k=>{if(k.startsWith('hm_')&&(k.includes('__Q__')||k.includes('_Q')))localStorage.removeItem(k);});localStorage.setItem('hm_last_reset',today);}
 }
-
-// ── Veilleur minuit : vérifie toutes les 30 s si le jour a changé ──
-let _dailyWatcherDate=todayKey();
-setInterval(function(){
-  const now=todayKey();
-  if(now!==_dailyWatcherDate){
-    _dailyWatcherDate=now;
-    localStorage.setItem('hm_last_reset',new Date().toDateString());
-    purgeOldDailyCompletions(); // reset en temps réel même app ouverte la nuit
-  }
-},30000);
 function setVH(){document.documentElement.style.setProperty('--vh',(window.innerHeight*0.01)+'px');}
 window.addEventListener('resize',setVH);setVH();
 // touchend supprimé — causait des blocages sur mobile
