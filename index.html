@@ -2764,10 +2764,54 @@ function setResType(type){
   ['J','C','H','Mens','T','A'].forEach(t=>{const btn=document.getElementById(`res-btn-${t}`);if(btn)btn.classList.toggle('active',t===type);});
   renderResults();
 }
+// ── Cache séparé pour les completions historiques (jours passés) ──
+let _histCompletions = null;
+let _histCompLoadedFor = '';
+
+async function _loadHistoricalCompletions(){
+  if(!_sbClient||!_fbConnected) return null;
+  try{
+    const rows = await _sb.getAll('hm_completions');
+    if(!rows||!rows.length) return null;
+    let merged={};
+    rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+    return merged;
+  }catch(e){ return null; }
+}
+
+function isTaskDoneForDateHist(rid,tid,freq,dateStr){
+  const src = _histCompletions || completions;
+  const targetPeriod=periodKeyForDate(freq,dateStr);
+  const suffix='__'+rid+'__'+tid+'__'+targetPeriod;
+  const found=Object.keys(src).some(k=>k.endsWith(suffix)&&src[k]);
+  if(found)return true;
+  return !!completionLog.find(e=>e.roleId===rid&&e.taskId===tid&&e.period===targetPeriod&&(freq===null||e.freq===freq));
+}
+
 function renderResults(){
   const dateVal=document.getElementById('res-date').value;
   const content=document.getElementById('results-content');
   if(!dateVal){content.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted);">Sélectionnez une date.</div>`;return;}
+  const isToday = dateVal===todayKey();
+  if(isToday||!_sbClient||!_fbConnected){
+    _buildResults(dateVal);
+    return;
+  }
+  if(_histCompLoadedFor===dateVal&&_histCompletions!==null){
+    _buildResults(dateVal);
+    return;
+  }
+  content.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:28px;margin-bottom:12px;">⏳</div><div style="font-weight:700;">Chargement des données historiques…</div><div style="font-size:11px;margin-top:6px;color:#aaa;">Récupération depuis Supabase</div></div>`;
+  _loadHistoricalCompletions().then(hist=>{
+    _histCompletions=hist;
+    _histCompLoadedFor=dateVal;
+    _buildResults(dateVal);
+  }).catch(()=>{ _buildResults(dateVal); });
+}
+
+function _buildResults(dateVal){
+  const content=document.getElementById('results-content');
+  if(!content)return;
   if(resType==='J')content.innerHTML=buildDailyResults(dateVal);
   else if(resType==='C')content.innerHTML=buildCumulResults(dateVal);
   else if(resType==='H')content.innerHTML=buildWeeklyResults(dateVal);
@@ -2785,7 +2829,7 @@ function buildDailyResults(dateStr){
     let rd=0;
     const rLogs=completionLog.filter(e=>e.roleId===r.id&&e.freq==='Q'&&e.period===dateStr);
     rTasks.forEach(t=>{
-      if(isTaskDoneForDate(r.id,t.id,'Q',dateStr)) rd++;
+      if(isTaskDoneForDateHist(r.id,t.id,'Q',dateStr)) rd++;
     });
     roleStats[r.id]={tasks:rTasks,logs:rLogs,done:rd};
     totalQ+=rTasks.length; doneCount+=rd;
@@ -2799,7 +2843,7 @@ function buildDailyResults(dateStr){
     const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
     // Détail des tâches avec horaire
     const tasksDetail=rTasks.map(t=>{
-      const done=isTaskDoneForDate(r.id,t.id,'Q',dateStr);
+      const done=isTaskDoneForDateHist(r.id,t.id,'Q',dateStr);
       const logE=rLogs.find(e=>e.taskId===t.id); // pour timestamp uniquement
       let horaireHtml='';
       if(t.deadline){
@@ -2858,7 +2902,7 @@ function buildWeeklyResults(dateStr){
   getAllRoles().forEach(r=>{
     const rH=getAllTasks(r.id).filter(t=>t.freq==='H');
     totalH+=rH.length;
-    rH.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'H',dateStr))doneH++;});
+    rH.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'H',dateStr))doneH++;});
   });
   const pctH=totalH?Math.round(doneH/totalH*100):0;
   let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
@@ -2882,11 +2926,11 @@ function buildWeeklyResults(dateStr){
         const rHLogs=completionLog.filter(e=>e.roleId===r.id&&e.freq==='H'&&e.period===weekStr);
         const rHTasks=getAllTasks(r.id).filter(t=>t.freq==='H');
         if(!rHTasks.length)return;
-        let rd=0;rHTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'H',dateStr))rd++;});
+        let rd=0;rHTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'H',dateStr))rd++;});
         const totalR=rHTasks.length;
         const rPct=totalR?Math.round(rd/totalR*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
         const tasksHtml=rHTasks.map(t=>{
-          const done=isTaskDoneForDate(r.id,t.id,'H',dateStr);
+          const done=isTaskDoneForDateHist(r.id,t.id,'H',dateStr);
           const logE=rHLogs.find(e=>e.taskId===t.id); // pour timestamp uniquement
           let hBadge='';
           if(t.deadline){
@@ -2922,7 +2966,7 @@ function buildMonthlyResults(dateStr){
   getAllRoles().forEach(r=>{
     const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
     totalM+=rM.length;
-    rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',dateStr))doneM++;});
+    rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',dateStr))doneM++;});
   });
   const pctM=totalM?Math.round(doneM/totalM*100):0;
   // Tâches Q : nbr de jours du mois passés
@@ -2933,7 +2977,7 @@ function buildMonthlyResults(dateStr){
     const dStr=`${monthStr}-${String(i).padStart(2,'0')}`;
     const isFuture=dStr>today;
     const done=completionLog.filter(e=>e.freq==='Q'&&e.period===dStr).length;
-    let doneCnt=0;if(!isFuture){getAllRoles().forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
+    let doneCnt=0;if(!isFuture){getAllRoles().forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
     const pct=totalQ?Math.round((isFuture?0:doneCnt)/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:90px;">${fmtDateStr(dStr)}${dStr===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
   }
@@ -2943,9 +2987,9 @@ function buildMonthlyResults(dateStr){
   let mDetailHtml='';
   getAllRoles().forEach(r=>{
     const rMTasks=getAllTasks(r.id).filter(t=>t.freq==='M');if(!rMTasks.length)return;
-    let rd=0;rMTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',dateStr))rd++;});
+    let rd=0;rMTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',dateStr))rd++;});
     const rPct=rMTasks.length?Math.round(rd/rMTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
-    const tasksHtml=rMTasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'M',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    const tasksHtml=rMTasks.map(t=>{const done=isTaskDoneForDateHist(r.id,t.id,'M',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f0fff4':'#fff5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a6b3c':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
     mDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rMTasks.length})</span></div>${tasksHtml}</div>`;
   });
   return `<div class="res-card"><h3>🗓️ Mensuel — ${monthLabel}</h3>
@@ -2969,7 +3013,7 @@ function buildQuarterlyResults(dateStr){
   getAllRoles().forEach(r=>{
     const rT=getAllTasks(r.id).filter(t=>t.freq==='T');
     totalT+=rT.length;
-    rT.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'T',dateStr))doneT++;});
+    rT.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',dateStr))doneT++;});
   });
   // Tâches M par mois du trimestre
   let totalMDone=0,totalMPoss=0,monthsHtml='';
@@ -2977,7 +3021,7 @@ function buildQuarterlyResults(dateStr){
     const mDate=m+'-15'; // date représentative du mois
     const isFuture=m>today.slice(0,7);
     let mDone=0,mTotal=0;
-    getAllRoles().forEach(r=>{const rM=getAllTasks(r.id).filter(t=>t.freq==='M');mTotal+=rM.length;if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',mDate))mDone++;});});
+    getAllRoles().forEach(r=>{const rM=getAllTasks(r.id).filter(t=>t.freq==='M');mTotal+=rM.length;if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',mDate))mDone++;});});
     const pct=mTotal?Math.round(mDone/mTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture){totalMDone+=mDone;totalMPoss+=mTotal;}
     monthsHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:100px;">${monthNames[parseInt(m.slice(5,7))]}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -2990,9 +3034,9 @@ function buildQuarterlyResults(dateStr){
   let tDetailHtml='';
   getAllRoles().forEach(r=>{
     const rTTasks=getAllTasks(r.id).filter(t=>t.freq==='T');if(!rTTasks.length)return;
-    let rd=0;rTTasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'T',dateStr))rd++;});
+    let rd=0;rTTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',dateStr))rd++;});
     const rPct=rTTasks.length?Math.round(rd/rTTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
-    const tasksHtml=rTTasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'T',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f5eef8':'#f9f9fb'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#6c3483':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    const tasksHtml=rTTasks.map(t=>{const done=isTaskDoneForDateHist(r.id,t.id,'T',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#f5eef8':'#f9f9fb'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#6c3483':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
     tDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rTTasks.length})</span></div>${tasksHtml}</div>`;
   });
   return `<div class="res-card"><h3>📊 Trimestriel — T${q} ${d.getFullYear()}</h3>
@@ -3015,7 +3059,7 @@ function buildAnnualResults(dateStr){
   getAllRoles().forEach(r=>{
     const rA=getAllTasks(r.id).filter(t=>t.freq==='A');
     totalA+=rA.length;
-    rA.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'A',dateStr))doneA++;});
+    rA.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'A',dateStr))doneA++;});
   });
   // Tâches M/T par mois
   let monthsHtml='',totalMDone=0,totalMPoss=0;
@@ -3026,7 +3070,7 @@ function buildAnnualResults(dateStr){
     getAllRoles().forEach(r=>{
       const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
       mTotal+=rM.length;
-      if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'M',mDate))mDone++;});
+      if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',mDate))mDone++;});
     });
     const pct=mTotal?Math.round(mDone/mTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture){totalMDone+=mDone;totalMPoss+=mTotal;}
@@ -3040,9 +3084,9 @@ function buildAnnualResults(dateStr){
   let aDetailHtml='';
   getAllRoles().forEach(r=>{
     const rATasks=getAllTasks(r.id).filter(t=>t.freq==='A');if(!rATasks.length)return;
-    let rd=0;rATasks.forEach(t=>{if(isTaskDoneForDate(r.id,t.id,'A',dateStr))rd++;});
+    let rd=0;rATasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'A',dateStr))rd++;});
     const rPct=rATasks.length?Math.round(rd/rATasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
-    const tasksHtml=rATasks.map(t=>{const done=isTaskDoneForDate(r.id,t.id,'A',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#eaf0f5':'#f5f5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a3a4a':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
+    const tasksHtml=rATasks.map(t=>{const done=isTaskDoneForDateHist(r.id,t.id,'A',dateStr);return `<div style="display:flex;align-items:center;padding:4px 8px;background:${done?'#eaf0f5':'#f5f5f5'};border-radius:6px;margin:3px 0;font-size:11px;"><span style="margin-right:6px;">${done?'✅':'⬜'}</span><span style="flex:1;color:${done?'#1a3a4a':'#555'};text-decoration:${done?'line-through':'none'}">${t.label}</span></div>`;}).join('');
     aDetailHtml+=`<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${r.icon}</span><strong style="font-size:12px;">${r.label}</strong><span style="font-size:11px;color:${rPc};font-weight:700;margin-left:auto;">${rPct}% (${rd}/${rATasks.length})</span></div>${tasksHtml}</div>`;
   });
   return `<div class="res-card"><h3>📅 Annuel — ${year}</h3>
@@ -3113,13 +3157,13 @@ function buildReportHTML(forPrint=false){
   function _tp(fr){if(fr==='Q')return chosenDate;if(fr==='H')return weekKeyForDate(chosenDate);if(fr==='M')return chosenDate.slice(0,7);if(fr==='T')return quarterKeyForDate(chosenDate);if(fr==='A')return yearKeyForDate(chosenDate);return chosenDate;}
   let logEntries=null;
   if(exportType==="C"){const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;if(f&&t)logEntries=completionLog.filter(e=>e.period>=f&&e.period<=t);}
-  // _isDoneInLog : utilise completions (source de vérité) + fallback log pour mode C
+  // _isDoneInLog : utilise _histCompletions (source de vérité historique) + fallback log pour mode C
   function _isDoneInLog(rid,tid,fr){
     if(exportType==="C"){
       if(!logEntries)return isTaskDone(rid,tid,fr);
       return !!logEntries.find(e=>e.roleId===rid&&e.taskId===tid);
     }
-    return isTaskDoneForDate(rid,tid,fr,chosenDate);
+    return isTaskDoneForDateHist(rid,tid,fr,chosenDate);
   }
   let body="",totalDone=0,totalTasks=0;
   roles.forEach(r=>{
@@ -3202,7 +3246,18 @@ td{padding:4px 7px;vertical-align:top;border-bottom:1px solid #f0f2f5;line-heigh
 </body></html>`;
 }
 
-function showPreview(){
+// ── Helper : s'assurer que _histCompletions est chargé avant de générer un rapport ──
+async function _ensureHistCompletions(){
+  const chosenDate=getExportDateVal();
+  const isToday=chosenDate===todayKey();
+  if(isToday||!_sbClient||!_fbConnected) return; // live suffit
+  if(_histCompLoadedFor===chosenDate&&_histCompletions!==null) return; // déjà en cache
+  const hist=await _loadHistoricalCompletions().catch(()=>null);
+  if(hist){ _histCompletions=hist; _histCompLoadedFor=chosenDate; }
+}
+
+async function showPreview(){
+  await _ensureHistCompletions();
   const html=buildReportHTML(false);
   const panel=document.getElementById("preview-panel");panel.classList.add("open");
   const iframe=document.getElementById("preview-iframe");
@@ -3210,13 +3265,15 @@ function showPreview(){
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 function closePreview(){document.getElementById("preview-panel").classList.remove("open");}
-function printReport(){
+async function printReport(){
+  await _ensureHistCompletions();
   const html=buildReportHTML(true);const w=window.open("","_blank");
   if(!w){alert("Autorisez les popups.");return;}
   w.document.write(html);w.document.close();w.onload=()=>{w.focus();w.print();};
 }
 
 async function downloadPDF(){
+  await _ensureHistCompletions();
   // Vérifier html2canvas et jsPDF
   if(typeof html2canvas==='undefined'){
     showToast('⏳ Chargement des librairies...','#2980b9');
@@ -3667,12 +3724,23 @@ async function initSupabase(cfg){
     // hm_completions : re-fetch systématique (payload.new.data souvent null en jsonb)
     _sb.on('hm_completions', async (payload)=>{
       const changedUserId = payload.new?.user_id || payload.old?.user_id;
+      // Helper local : filtrer les clés d'un jour passé
+      function _filterTodayOnly(data){
+        const today=todayKey();
+        const filtered={};
+        Object.keys(data).forEach(k=>{
+          const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+          if(!m||m[1]===today) filtered[k]=data[k];
+        });
+        return filtered;
+      }
       if(isDirecteur()){
         // Admin : refusionner toutes les completions
         const rows = await _sb.getAll('hm_completions').catch(()=>[]);
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+          merged=_filterTodayOnly(merged); // ← guard anti-résurrection
           completions=merged;
           localStorage.setItem('hm_comp_'+(currentUser?.id||'guest'),JSON.stringify(completions));
         }
@@ -4286,11 +4354,23 @@ function startSupabasePoll(){
       }
 
       // ── Polling des completions (fallback si Realtime WS défaillant) ──
+      // Guard : ne jamais réimporter des completions d'un jour passé (évite la résurrection post-minuit)
+      function _filterTodayCompletions(data){
+        const today=todayKey();
+        const filtered={};
+        Object.keys(data).forEach(k=>{
+          const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+          // Garder : clés non-quotidiennes (hebdo/mensuel/etc.) ou clés de la date du jour
+          if(!m || m[1]===today) filtered[k]=data[k];
+        });
+        return filtered;
+      }
       if(isDirecteur()){
         const rows = await _sb.getAll('hm_completions').catch(()=>null);
         if(rows && rows.length>0){
           let merged={};
           rows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(merged,r.data); });
+          merged=_filterTodayCompletions(merged); // ← guard anti-résurrection
           const newHash=JSON.stringify(merged);
           if(newHash !== (window._sbPollCompHash||'')){
             window._sbPollCompHash=newHash;
@@ -4307,10 +4387,11 @@ function startSupabasePoll(){
       } else if(currentUser){
         const myComp = await _sb.get('hm_completions', currentUser.id).catch(()=>null);
         if(myComp && typeof myComp==='object'){
-          const newHash=JSON.stringify(myComp);
+          const filtered=_filterTodayCompletions(myComp); // ← guard anti-résurrection
+          const newHash=JSON.stringify(filtered);
           if(newHash !== (window._sbPollCompHash||'')){
             window._sbPollCompHash=newHash;
-            completions=myComp;
+            completions=filtered;
             localStorage.setItem('hm_comp_'+currentUser.id,JSON.stringify(completions));
             renderTasks(); renderProgressBar();
             showToast('\uD83D\uDD04 Tâches synchronisées','#2980b9');
@@ -4645,19 +4726,25 @@ setInterval(checkUpcomingTaskNotifs, 30000);
 
 function purgeOldDailyCompletions(silent){
   const today=todayKey();
+
+  // ── 1. Purge locale (RAM + localStorage) ──
   const keysToDelete=Object.keys(completions).filter(k=>{
     const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
     return m && m[1]!==today;
   });
-  if(keysToDelete.length===0)return;
   keysToDelete.forEach(k=>delete completions[k]);
   const uid=currentUser?currentUser.id:'guest';
   try{
     localStorage.setItem('hm_comp_'+uid,JSON.stringify(completions));
     localStorage.setItem('hm_comp',JSON.stringify(completions));
   }catch(e){}
+
+  // ── 2. Purge Supabase hm_completions (tous les users) ──
   if(_sbClient&&_fbConnected&&currentUser){
+    // Sauvegarder les completions nettoyées du user courant
     _sb.set('hm_completions',uid,completions).catch(()=>{});
+
+    // Admin : purger aussi les lignes des autres users dans Supabase
     if(isDirecteur()){
       _sb.getAll('hm_completions').then(rows=>{
         if(!rows)return;
@@ -4669,11 +4756,50 @@ function purgeOldDailyCompletions(silent){
             if(!m||m[1]===today) cleaned[k]=r.data[k];
           });
           const rowUid=r.user_id||r.key;
-          if(rowUid!==uid) _sb.set('hm_completions',rowUid,cleaned).catch(()=>{});
+          _sb.set('hm_completions',rowUid,cleaned).catch(()=>{});
         });
       }).catch(()=>{});
     }
+
+    // ── 3. Purge Supabase hm_events (événements des jours passés) ──
+    // Supprimer tous les events dont la période n'est pas aujourd'hui
+    if(_sbClient&&_fbConnected){
+      _sbClient.from('hm_events').select('id,data')
+        .then(({data:evts,error})=>{
+          if(error||!evts||!evts.length)return;
+          const oldIds=evts
+            .filter(e=>{
+              if(!e.data||!e.data.period)return false;
+              // Garder seulement les events non-quotidiens ou dont la période est aujourd'hui
+              const p=e.data.period;
+              // period quotidien = YYYY-MM-DD ; hebdo = YYYY-Wnn ; mensuel = YYYY-MM
+              const isQperiod=/^\d{4}-\d{2}-\d{2}$/.test(p);
+              return isQperiod && p!==today;
+            })
+            .map(e=>e.id);
+          if(oldIds.length>0){
+            _sbClient.from('hm_events').delete().in('id',oldIds)
+              .then(({error:delErr})=>{
+                if(delErr) console.warn('[Purge events] erreur:',delErr.message);
+                else console.log(`[Purge events] ${oldIds.length} événement(s) supprimé(s) de hm_events`);
+              }).catch(()=>{});
+          }
+        }).catch(()=>{});
+      // Purger aussi le cache localStorage des events
+      try{
+        const localEvts=JSON.parse(localStorage.getItem('hm_events_local')||'{}');
+        const cleanedEvts={};
+        Object.keys(localEvts).forEach(k=>{
+          const e=localEvts[k];
+          if(!e||!e.period)return;
+          const isQperiod=/^\d{4}-\d{2}-\d{2}$/.test(e.period);
+          if(!isQperiod||e.period===today) cleanedEvts[k]=e;
+        });
+        localStorage.setItem('hm_events_local',JSON.stringify(cleanedEvts));
+      }catch(e){}
+    }
   }
+
   console.log(`[Reset quotidien] ${keysToDelete.length} completion(s) purgée(s) — conservé: ${today}`);
   if(!silent&&currentUser){
     renderTasks(); renderProgressBar(); renderDashboard();
