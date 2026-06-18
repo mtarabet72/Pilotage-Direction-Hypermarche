@@ -639,6 +639,9 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <div class="type-btn" data-type="M" onclick="setExportType('M',this)"><div class="tb-icon">🗓️</div><div class="tb-label">Mensuel</div><div class="tb-desc">Tâches du mois</div></div>
       <div class="type-btn" data-type="C" onclick="setExportType('C',this)"><div class="tb-icon">🔎</div><div class="tb-label">Personnalisé</div><div class="tb-desc">Plage de dates</div></div>
     </div>
+    <div id="daily-date-row" class="date-row" style="display:flex;">
+      <div class="date-field"><label id="daily-date-label">📅 Date du rapport</label><input type="date" id="date-daily"></div>
+    </div>
     <div id="custom-date-row" class="date-row" style="display:none;">
       <div class="date-field"><label>Du</label><input type="date" id="date-from"></div>
       <div class="date-field"><label>Au</label><input type="date" id="date-to"></div>
@@ -1404,6 +1407,7 @@ function onLoginSuccess(){
   // Demander permission notifications browser
   setTimeout(requestNotifPermission, 1500);
   const today=new Date().toISOString().slice(0,10);
+  if(document.getElementById("date-daily"))document.getElementById("date-daily").value=today;
   document.getElementById("date-from").value=today;
   document.getElementById("date-to").value=today;
   document.getElementById("res-date").value=today;
@@ -1987,6 +1991,8 @@ function toggleTask(tid,freq){
   // ── Notification temps réel vers l'admin ──
   pushTaskEventToAdmin(tid, freq, isDone, task, r, now);
   renderTasks();renderRoleHeader();renderProgressBar();renderSidebar();renderDashboard();
+  // Actualiser résultats en temps réel si la vue est visible
+  if(currentView==='results') renderResults();
 }
 function setFreq(f){currentFreq=f;renderControls();renderTasks();renderProgressBar();}
 function toggleAddForm(){
@@ -2856,7 +2862,23 @@ function buildWeeklyResults(dateStr){
 // EXPORT
 // ══════════════════════════════════════════════════════════════
 let scopeSet=new Set(["ALL"]);
-function setExportType(t,btn){exportType=t;document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");document.getElementById("custom-date-row").style.display=t==="C"?"flex":"none";}
+function setExportType(t,btn){
+  exportType=t;
+  document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  // Champ date unique (Q/H/M) — afficher/masquer + adapter le label
+  const ddr=document.getElementById("daily-date-row");
+  const dlbl=document.getElementById("daily-date-label");
+  if(ddr){
+    ddr.style.display=(t==="C")?"none":"flex";
+    if(dlbl){
+      if(t==="Q")dlbl.textContent="📅 Date du rapport";
+      else if(t==="H")dlbl.textContent="📅 Semaine du";
+      else if(t==="M")dlbl.textContent="📅 Mois de";
+    }
+  }
+  document.getElementById("custom-date-row").style.display=t==="C"?"flex":"none";
+}
 function renderExportScope(){
   const grid=document.getElementById("scope-grid");
   const allBtn=`<button class="scope-btn${scopeSet.has("ALL")?" active":""}" onclick="toggleScope('ALL',this)">🌐 Tout le magasin</button>`;
@@ -2871,10 +2893,16 @@ function toggleScope(id,btn){
 }
 function getExportRoles(){if(scopeSet.has("ALL"))return getAllRoles();return getAllRoles().filter(r=>scopeSet.has(r.id));}
 function getExportFreq(){return exportType==="C"?null:exportType;}
+function getExportDateVal(){
+  // Date choisie dans #date-daily, ou aujourd'hui par défaut
+  const el=document.getElementById("date-daily");
+  return (el&&el.value)?el.value:todayKey();
+}
 function getExportPeriodLabel(){
-  const d=new Date();
+  const dv=getExportDateVal();
+  const d=new Date(dv+'T12:00:00');
   if(exportType==="Q")return `Quotidien — ${fmtDate(d)}`;
-  if(exportType==="H")return `Hebdomadaire — Semaine ${weekKey()}`;
+  if(exportType==="H")return `Hebdomadaire — Semaine ${weekKeyForDate(dv)}`;
   if(exportType==="M")return `Mensuel — ${d.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}`;
   const f=document.getElementById("date-from").value,t=document.getElementById("date-to").value;
   return `Personnalisé — du ${fmtDateStr(f)||"…"} au ${fmtDateStr(t)||"…"}`;
