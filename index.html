@@ -451,6 +451,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <div style="font-size:13px;font-weight:800;" id="um-name">—</div>
     <div style="font-size:11px;color:var(--muted);" id="um-role">—</div>
   </div>
+  <button id="um-notif-btn" onclick="handleNotifBtnClick()" style="width:100%;padding:8px 12px;border:none;background:none;cursor:pointer;text-align:left;font-size:12px;font-weight:600;border-radius:7px;display:flex;align-items:center;gap:8px;touch-action:manipulation;" onmouseover="this.style.background='#f7f8fa'" onmouseout="this.style.background='none'">🔔 Activer les notifications</button>
   <button onclick="openChangePwModal();closeUserMenu();" style="width:100%;padding:8px 12px;border:none;background:none;cursor:pointer;text-align:left;font-size:12px;font-weight:600;border-radius:7px;display:flex;align-items:center;gap:8px;touch-action:manipulation;" onmouseover="this.style.background='#f7f8fa'" onmouseout="this.style.background='none'">🔑 Changer mon mot de passe</button>
   <button onclick="doLogout();closeUserMenu();" style="width:100%;padding:8px 12px;border:none;background:none;cursor:pointer;text-align:left;font-size:12px;font-weight:600;border-radius:7px;display:flex;align-items:center;gap:8px;color:#e74c3c;touch-action:manipulation;" onmouseover="this.style.background='#fdecea'" onmouseout="this.style.background='none'">🚪 Déconnexion</button>
 </div>
@@ -1478,8 +1479,9 @@ function onLoginSuccess(){
   document.getElementById('login-overlay').classList.add('hidden');
   updateHeaderUser();
   applyAccessControl();
-  // Demander permission notifications browser
-  setTimeout(requestNotifPermission, 1500);
+  // NB: la demande de permission notifications se fait désormais via clic
+  // explicite (bouton menu utilisateur) — un appel différé (setTimeout) est
+  // silencieusement bloqué par les navigateurs car hors contexte de geste utilisateur.
   const today=new Date().toISOString().slice(0,10);
   if(document.getElementById("date-daily"))document.getElementById("date-daily").value=today;
   document.getElementById("date-from").value=today;
@@ -1538,6 +1540,7 @@ function updateHeaderUser(){
 function showUserMenu(){
   document.getElementById('user-menu').style.display='block';
   document.getElementById('user-menu-overlay').style.display='block';
+  updateNotifBtnState();
 }
 function closeUserMenu(){
   document.getElementById('user-menu').style.display='none';
@@ -2843,11 +2846,18 @@ async function _loadHistoricalCompletions(){
 function isTaskDoneForDateHist(rid,tid,freq,dateStr){
   const targetPeriod=periodKeyForDate(freq,dateStr);
   const suffix='__'+rid+'__'+tid+'__'+targetPeriod;
-  // Chercher d'abord dans _histCompletions (Supabase complet sans filtre date)
+  // 1) Vérifier d'abord dans `completions` : source de vérité LIVE, toujours synchronisée
+  // avec Supabase (contient le jour courant + la période en cours pour H/M/T/A).
+  // Sans ce check, le calcul retombait directement sur completionLog (local only,
+  // jamais envoyé à Supabase) dès que _histCompletions n'était pas encore chargé —
+  // ce qui est systématiquement le cas pour "aujourd'hui". C'était la cause du
+  // décalage Résultats/Rapport vs Dashboard.
+  if(Object.keys(completions).some(k=>k.endsWith(suffix)&&completions[k])) return true;
+  // 2) Chercher dans _histCompletions (archive Supabase complète, pour les jours passés)
   if(_histCompletions){
     return Object.keys(_histCompletions).some(k=>k.endsWith(suffix)&&_histCompletions[k]);
   }
-  // Fallback : completionLog (historique local) — acceptable pour les rapports passés
+  // 3) Dernier recours : completionLog (historique local)
   return !!completionLog.find(e=>e.roleId===rid&&e.taskId===tid&&e.period===targetPeriod&&(freq===null||e.freq===freq));
 }
 
@@ -2945,8 +2955,18 @@ function buildCumulResults(dateStr){
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',cumDone=0;
   weekDates.forEach((d,i)=>{
-    const done=completionLog.filter(e=>e.freq==='Q'&&e.period===d).length;
-    const isFuture=d>today||d>dateStr;const pct=totalQ?Math.round(done/totalQ*100):0;
+    const isFuture=d>today||d>dateStr;
+    // Compter via isTaskDoneForDateHist (completions synchronisé + archive Supabase),
+    // PAS via completionLog.filter() qui n'existe qu'en local sur cet appareil.
+    let done=0;
+    if(!isFuture){
+      getAllRoles().forEach(r=>{
+        getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
+          if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
+        });
+      });
+    }
+    const pct=totalQ?Math.round(done/totalQ*100):0;
     const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture)cumDone+=done;
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.4':''}"><span class="res-day-label">${days[i]} ${fmtDateStr(d)}${d===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -2972,7 +2992,17 @@ function buildWeeklyResults(dateStr){
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',totalDoneQ=0,totalPossibleQ=0;
   weekDates.forEach((d,i)=>{
-    const done=completionLog.filter(e=>e.freq==='Q'&&e.period===d).length;const isFuture=d>today;
+    const isFuture=d>today;
+    // Idem buildCumulResults : compter via isTaskDoneForDateHist (synchronisé),
+    // pas via completionLog (local uniquement à cet appareil).
+    let done=0;
+    if(!isFuture){
+      getAllRoles().forEach(r=>{
+        getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
+          if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
+        });
+      });
+    }
     const pct=totalQ?Math.round(done/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture){totalDoneQ+=done;totalPossibleQ+=totalQ;}
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.4':''}"><span class="res-day-label">${days[i]} ${fmtDateStr(d)}${d===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${isFuture?'#ccc':pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -3039,7 +3069,6 @@ function buildMonthlyResults(dateStr){
   for(let i=1;i<=daysInMonth;i++){
     const dStr=`${monthStr}-${String(i).padStart(2,'0')}`;
     const isFuture=dStr>today;
-    const done=completionLog.filter(e=>e.freq==='Q'&&e.period===dStr).length;
     let doneCnt=0;if(!isFuture){getAllRoles().forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
     const pct=totalQ?Math.round((isFuture?0:doneCnt)/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:90px;">${fmtDateStr(dStr)}${dStr===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -4595,14 +4624,53 @@ function renderLivePanel(snap,updatedAt,byUser){
 // SYSTÈME DE NOTIFICATIONS BROWSER (PWA)
 // ══════════════════════════════════════════════════════════════
 
-// ── Demander la permission de notification au login ──
+// ── Demander la permission de notification (DOIT être appelé depuis un clic direct,
+//    sinon les navigateurs bloquent silencieusement le popup — aucune erreur visible) ──
 function requestNotifPermission(){
-  if(!('Notification' in window))return;
-  if(Notification.permission==='default'){
-    Notification.requestPermission().then(p=>{
-      if(p==='granted') showToast('🔔 Notifications activées','#27ae60');
-    });
+  if(!('Notification' in window)){
+    showToast('🔕 Notifications non supportées sur ce navigateur','#e74c3c');
+    return;
   }
+  if(Notification.permission==='granted'){
+    showToast('🔔 Notifications déjà activées','#27ae60');
+    updateNotifBtnState();
+    return;
+  }
+  if(Notification.permission==='denied'){
+    showToast('🔕 Notifications bloquées — autorisez-les dans les réglages du site (icône 🔒 à côté de l\'URL)','#e74c3c');
+    updateNotifBtnState();
+    return;
+  }
+  Notification.requestPermission().then(p=>{
+    if(p==='granted') showToast('🔔 Notifications activées','#27ae60');
+    else if(p==='denied') showToast('🔕 Notifications refusées','#e74c3c');
+    updateNotifBtnState();
+  });
+}
+// ── Met à jour le libellé/style du bouton selon l'état réel de la permission ──
+function updateNotifBtnState(){
+  const btn=document.getElementById('um-notif-btn');
+  if(!btn)return;
+  if(!('Notification' in window)){
+    btn.textContent='🔕 Notifications non supportées';
+    btn.style.color='var(--muted)'; btn.disabled=true;
+    return;
+  }
+  btn.disabled=false;
+  if(Notification.permission==='granted'){
+    btn.textContent='🔔 Notifications activées ✓';
+    btn.style.color='#27ae60';
+  } else if(Notification.permission==='denied'){
+    btn.textContent='🔕 Notifications bloquées (réglages navigateur)';
+    btn.style.color='#e74c3c';
+  } else {
+    btn.textContent='🔔 Activer les notifications';
+    btn.style.color='';
+  }
+}
+// ── Handler du bouton menu : appelé en direct depuis le clic (geste utilisateur requis) ──
+function handleNotifBtnClick(){
+  requestNotifPermission();
 }
 
 // ── Envoyer une notification native ──
