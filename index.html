@@ -2316,6 +2316,18 @@ function setViewMode(mode){
   document.getElementById('view-mode-rayon').style.color=mode==='rayon'?'#fff':'#555';
   document.getElementById('view-mode-rayon').style.borderColor=mode==='rayon'?'var(--accent)':'#ccc';
   document.getElementById('rayon-selector').style.display=mode==='rayon'?'block':'none';
+  // Les tâches de rayon n'existent qu'en Q/H/M (jamais T/A) — masquer ces boutons
+  // en mode Rayon, et si le filtre actif était T/A (resté du mode Par Fonction),
+  // le réinitialiser sur "Toutes" pour éviter un filtrage qui ne matche aucune
+  // tâche de rayon (cause du bug "les tâches n'affichent pas").
+  const tBtn=document.querySelector('.freq-btn[data-freq="T"]');
+  const aBtn=document.querySelector('.freq-btn[data-freq="A"]');
+  if(tBtn) tBtn.style.display=mode==='rayon'?'none':'';
+  if(aBtn) aBtn.style.display=mode==='rayon'?'none':'';
+  if(mode==='rayon'&&(currentFreq==='T'||currentFreq==='A')){
+    currentFreq='ALL';
+  }
+  renderControls();
   if(mode==='rayon'){
     renderSelectRayon();
     const keys=Object.keys(customRayons);
@@ -2350,7 +2362,11 @@ function afficherRayon(key){
 }
 function renderTasksRayon(rayon){
   const tl=document.getElementById('task-list');
-  const tachesFiltrees=rayon.taches.filter(t=>currentFreq==='ALL'||t.freq===currentFreq);
+  // Sécurité : les tâches de rayon n'ont jamais freq T/A — si le filtre global
+  // est resté sur l'un de ces deux (hérité de la vue Par Fonction), on l'ignore
+  // ici pour ne pas afficher "Aucune tâche" à tort.
+  const freqRayon=(currentFreq==='T'||currentFreq==='A')?'ALL':currentFreq;
+  const tachesFiltrees=rayon.taches.filter(t=>freqRayon==='ALL'||t.freq===freqRayon);
   if(!tachesFiltrees.length){tl.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted);">Aucune tâche.</div>`;return;}
   tl.innerHTML=tachesFiltrees.map(t=>{
     const sk=`hm_rayon_${rayonActif}_${t.id}_${t.freq}`;const estFaite=localStorage.getItem(sk)==='true';
@@ -2368,7 +2384,8 @@ function toggleTaskRayon(tid,freq){
   localStorage.setItem(k,!(localStorage.getItem(k)==='true'));afficherRayon(rayonActif);
 }
 function renderProgressBarRayon(rayon){
-  const taches=rayon.taches.filter(t=>currentFreq==='ALL'||t.freq===currentFreq);
+  const freqRayon=(currentFreq==='T'||currentFreq==='A')?'ALL':currentFreq;
+  const taches=rayon.taches.filter(t=>freqRayon==='ALL'||t.freq===freqRayon);
   const faites=taches.filter(t=>localStorage.getItem(`hm_rayon_${rayonActif}_${t.id}_${t.freq}`)==='true').length;
   const pct=taches.length?Math.round(faites/taches.length*100):0;
   const el=document.getElementById('rayon-pct');if(el)el.textContent=`${pct}%`;
