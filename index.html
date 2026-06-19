@@ -1399,6 +1399,25 @@ function onLoginSuccess(){
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
         renderRayonsList(); renderSelectRayon();
+
+        // ── Migration one-shot : copier hm_completions → hm_history si hm_history vide ──
+        // Garantit que les données existantes sont préservées avant la purge
+        _sb.get('hm_app_data','hm_history').then(existingHist=>{
+          if(!existingHist || Object.keys(existingHist).length===0){
+            // hm_history vide → migrer depuis hm_completions (toutes dates confondues)
+            _sb.getAll('hm_completions').then(allRows=>{
+              if(!allRows||!allRows.length) return;
+              let allMerged={};
+              allRows.forEach(r=>{ if(r.data&&typeof r.data==='object') Object.assign(allMerged,r.data); });
+              if(Object.keys(allMerged).length>0){
+                _sb.set('hm_app_data','hm_history',allMerged)
+                  .then(()=>console.log('[Migration] hm_completions → hm_history OK'))
+                  .catch(()=>{});
+              }
+            }).catch(()=>{});
+          }
+        }).catch(()=>{});
+
         purgeOldDailyCompletions(true);
         renderTasks(); renderProgressBar(); renderDashboard();
       }).catch(()=>{});
@@ -2063,6 +2082,17 @@ function toggleTask(tid,freq){
   if(_sbClient && _fbConnected){
     const uid=currentUser?currentUser.id:'guest';
     _sb.set('hm_completions', uid, completions).catch(()=>{});
+
+    // ── Archive permanente : sauvegarder dans hm_history (jamais purgée) ──
+    // Structure : { "uid__rid__tid__period": true/false, ... }
+    // Séparée de hm_completions pour ne pas être affectée par la purge quotidienne
+    _sb.get('hm_app_data','hm_history').then(hist=>{
+      const archive = (hist && typeof hist==='object') ? hist : {};
+      const key2=ck(currentRoleId,tid,freq);
+      if(isDone) archive[key2]=true;
+      else delete archive[key2];
+      return _sb.set('hm_app_data','hm_history',archive);
+    }).catch(()=>{});
   }
 
   // ── Notification temps réel vers l'admin ──
@@ -2798,6 +2828,10 @@ let _histCompLoadedFor = '';
 async function _loadHistoricalCompletions(){
   if(!_sbClient||!_fbConnected) return null;
   try{
+    // Source principale : hm_history (archive permanente, jamais purgée)
+    const hist = await _sb.get('hm_app_data','hm_history');
+    if(hist && typeof hist==='object' && Object.keys(hist).length>0) return hist;
+    // Fallback : hm_completions sans filtre date (avant migration vers hm_history)
     const rows = await _sb.getAll('hm_completions');
     if(!rows||!rows.length) return null;
     let merged={};
