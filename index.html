@@ -890,30 +890,30 @@ const ROLES=[
   // Rôle transversal et tournant : checklist indépendante des rayons.
   // Le responsable du jour est désigné via le Planning de Permanence (Réglages),
   // pas par une équipe fixe. Voir getPermanenceAssignedName().
-  {secteur:"Permanence",id:"perm_matin",label:"Permanencier Matin",sous:"Continuité Magasin · avant 12:00",color:"#f39c12",light:"#fef9f0",icon:"🌅",
+  {secteur:"Permanence",id:"perm_matin",label:"Permanencier Matin",sous:"Continuité Magasin · horaire selon planning",color:"#f39c12",light:"#fef9f0",icon:"🌅",
    gere:[],rayons:[],
    taches:[
-     {id:'perm_m01',freq:'Q',deadline:'12:00',label:"Lecture de la note de passation (Soir précédent)",note:"Continuité de service — Shift Handover Log, standard NRF/ISO 9001"},
-     {id:'perm_m02',freq:'Q',deadline:'12:00',label:"Tour d'ouverture complet — sécurité, accès, alarme",note:"Ronde sécurité ouverture — Document Unique (DUERP)"},
-     {id:'perm_m03',freq:'Q',deadline:'12:00',label:"Vérification présence encadrement par secteur",note:"Suivi effectifs cadres — continuité de direction"},
-     {id:'perm_m04',freq:'Q',deadline:'12:00',label:"Contrôle affichage prix et promotions du jour",note:"Conformité légale — Loi anti-fraude"},
-     {id:'perm_m05',freq:'Q',deadline:'12:00',label:"Validation ouverture des caisses et fonds de caisse",note:"Standard NRF POS"},
-     {id:'perm_m06',freq:'Q',deadline:'12:00',label:"Brief court avec les chefs de rayon présents",note:"Coordination matinale — NRF Daily Huddle"},
-     {id:'perm_m07',freq:'Q',deadline:'12:00',label:"Traitement des urgences et réclamations remontées",note:"Continuité de service client"},
-     {id:'perm_m08',freq:'Q',deadline:'12:00',label:"Contrôle températures chambres froides / surgelés",note:"HACCP CCP T° — si chef de secteur frais absent"},
-     {id:'perm_m09',freq:'Q',deadline:'12:00',label:"Rédaction de la note de passation pour la suite de la journée",note:"À transmettre au permanencier Tranche ou Soir"},
+     {id:'perm_m01',freq:'Q',label:"Lecture de la note de passation (Soir précédent)",note:"Continuité de service — Shift Handover Log, standard NRF/ISO 9001"},
+     {id:'perm_m02',freq:'Q',label:"Tour d'ouverture complet — sécurité, accès, alarme",note:"Ronde sécurité ouverture — Document Unique (DUERP)"},
+     {id:'perm_m03',freq:'Q',label:"Vérification présence encadrement par secteur",note:"Suivi effectifs cadres — continuité de direction"},
+     {id:'perm_m04',freq:'Q',label:"Contrôle affichage prix et promotions du jour",note:"Conformité légale — Loi anti-fraude"},
+     {id:'perm_m05',freq:'Q',label:"Validation ouverture des caisses et fonds de caisse",note:"Standard NRF POS"},
+     {id:'perm_m06',freq:'Q',label:"Brief court avec les chefs de rayon présents",note:"Coordination matinale — NRF Daily Huddle"},
+     {id:'perm_m07',freq:'Q',label:"Traitement des urgences et réclamations remontées",note:"Continuité de service client"},
+     {id:'perm_m08',freq:'Q',label:"Contrôle températures chambres froides / surgelés",note:"HACCP CCP T° — si chef de secteur frais absent"},
+     {id:'perm_m09',freq:'Q',label:"Rédaction de la note de passation pour la suite de la journée",note:"À transmettre au permanencier Tranche ou Soir"},
    ]},
-  {secteur:"Permanence",id:"perm_soir",label:"Permanencier Soir",sous:"Continuité Magasin · avant 22:00",color:"#34495e",light:"#eaecee",icon:"🌙",
+  {secteur:"Permanence",id:"perm_soir",label:"Permanencier Soir",sous:"Continuité Magasin · horaire selon planning",color:"#34495e",light:"#eaecee",icon:"🌙",
    gere:[],rayons:[],
    taches:[
-     {id:'perm_s01',freq:'Q',deadline:'22:00',label:"Lecture de la note de passation du créneau précédent",note:"Continuité de service — Shift Handover Log"},
-     {id:'perm_s02',freq:'Q',deadline:'22:00',label:"Ronde générale tous secteurs avant fermeture",note:"Store Walk transversal — pratique Gemba Walk"},
-     {id:'perm_s03',freq:'Q',deadline:'22:00',label:"Contrôle clôture caisses et arrêté journalier",note:"Comptage, écarts, validation — Procédure comptable"},
-     {id:'perm_s04',freq:'Q',deadline:'22:00',label:"Vérification fermeture issues, alarme, vidéosurveillance",note:"Sûreté fermeture — Standard Retail Loss Prevention"},
-     {id:'perm_s05',freq:'Q',deadline:'22:00',label:"Validation rangement réserve et zones de stockage",note:"Sécurité et accessibilité — GS1 Store Standards"},
-     {id:'perm_s06',freq:'Q',deadline:'22:00',label:"Rapport des incidents de la journée",note:"Vols, accidents, réclamations — Registre obligatoire"},
-     {id:'perm_s07',freq:'Q',deadline:'22:00',label:"Vérification présence agents de sécurité pour la nuit",note:"Continuité sûreté hors heures d'ouverture"},
-     {id:'perm_s08',freq:'Q',deadline:'22:00',label:"Rédaction de la note de passation pour le Matin suivant",note:"Transmission obligatoire — continuité J+1"},
+     {id:'perm_s01',freq:'Q',label:"Lecture de la note de passation du créneau précédent",note:"Continuité de service — Shift Handover Log"},
+     {id:'perm_s02',freq:'Q',label:"Ronde générale tous secteurs avant fermeture",note:"Store Walk transversal — pratique Gemba Walk"},
+     {id:'perm_s03',freq:'Q',label:"Contrôle clôture caisses et arrêté journalier",note:"Comptage, écarts, validation — Procédure comptable"},
+     {id:'perm_s04',freq:'Q',label:"Vérification fermeture issues, alarme, vidéosurveillance",note:"Sûreté fermeture — Standard Retail Loss Prevention"},
+     {id:'perm_s05',freq:'Q',label:"Validation rangement réserve et zones de stockage",note:"Sécurité et accessibilité — GS1 Store Standards"},
+     {id:'perm_s06',freq:'Q',label:"Rapport des incidents de la journée",note:"Vols, accidents, réclamations — Registre obligatoire"},
+     {id:'perm_s07',freq:'Q',label:"Vérification présence agents de sécurité pour la nuit",note:"Continuité sûreté hors heures d'ouverture"},
+     {id:'perm_s08',freq:'Q',label:"Rédaction de la note de passation pour le Matin suivant",note:"Transmission obligatoire — continuité J+1"},
    ]},
   {secteur:"Permanence",id:"perm_tranche",label:"Permanencier Tranche",sous:"Continuité Magasin · horaire variable",color:"#16a085",light:"#e8f8f5",icon:"🔄",
    gere:[],rayons:[],
@@ -1194,12 +1194,22 @@ function renderPermanencePlanning(){
   const userOptions=(selected)=>`<option value="">— Non assigné —</option>`+users.map(u=>`<option value="${u.id}"${u.id===selected?' selected':''}>${u.name}</option>`).join('');
   const jours=[0,1,2,3,4,5,6].map(i=>dateKeyPlus(i));
   const joursNomMap={0:'Dim',1:'Lun',2:'Mar',3:'Mer',4:'Jeu',5:'Ven',6:'Sam'};
-  el.innerHTML=`<table style="width:100%;border-collapse:collapse;min-width:640px;font-size:12px;">
+  // Un bloc [responsable + heure début + heure fin] identique pour les 3 créneaux —
+  // chaque jour peut avoir ses propres horaires (ex. Soir 22h00 certains jours, minuit d'autres).
+  const slotCell=(slot,entry,phDebut,phFin)=>`
+    <select class="task-mgmt-role-select" style="margin:0 0 4px;font-size:12px;" data-slot="${slot}" data-field="userId">${userOptions(entry.userId)}</select>
+    <div style="display:flex;gap:4px;align-items:center;">
+      <input type="time" value="${entry.heureDebut||''}" data-slot="${slot}" data-field="heureDebut" title="Heure de début" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
+      <span style="color:var(--muted);font-size:10px;">–</span>
+      <input type="time" value="${entry.heureFin||''}" data-slot="${slot}" data-field="heureFin" title="Heure de fin (mettre une heure plus petite que le début = passage à minuit)" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
+    </div>`;
+  el.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">⏰ Heures laissées vides = créneau actif toute la journée, sans badge de ponctualité. Pour un créneau qui passe minuit (ex. Soir 22:00 → 00:30), saisissez une heure de fin <strong>plus petite</strong> que l'heure de début — c'est géré automatiquement.</div>
+  <table style="width:100%;border-collapse:collapse;min-width:760px;font-size:12px;">
     <thead><tr style="text-align:left;border-bottom:2px solid var(--border);">
       <th style="padding:6px 8px;">Jour</th>
-      <th style="padding:6px 8px;">🌅 Matin (avant 12h)</th>
-      <th style="padding:6px 8px;">🌙 Soir (avant 22h)</th>
+      <th style="padding:6px 8px;">🌅 Matin</th>
       <th style="padding:6px 8px;">🔄 Tranche</th>
+      <th style="padding:6px 8px;">🌙 Soir</th>
     </tr></thead>
     <tbody>
     ${jours.map((d,i)=>{
@@ -1208,16 +1218,10 @@ function renderPermanencePlanning(){
       const plan=permanencePlanning[d]||{};
       const matin=plan.matin||{},soir=plan.soir||{},tranche=plan.tranche||{};
       return `<tr style="border-bottom:1px solid #f0f2f5;" data-date="${d}">
-        <td style="padding:6px 8px;font-weight:700;white-space:nowrap;">${label}</td>
-        <td style="padding:6px 8px;"><select class="task-mgmt-role-select" style="margin:0;font-size:12px;" data-slot="matin" data-field="userId">${userOptions(matin.userId)}</select></td>
-        <td style="padding:6px 8px;"><select class="task-mgmt-role-select" style="margin:0;font-size:12px;" data-slot="soir" data-field="userId">${userOptions(soir.userId)}</select></td>
-        <td style="padding:6px 8px;">
-          <select class="task-mgmt-role-select" style="margin:0 0 4px;font-size:12px;" data-slot="tranche" data-field="userId">${userOptions(tranche.userId)}</select>
-          <div style="display:flex;gap:4px;">
-            <input type="time" value="${tranche.heureDebut||''}" data-slot="tranche" data-field="heureDebut" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
-            <input type="time" value="${tranche.heureFin||''}" data-slot="tranche" data-field="heureFin" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
-          </div>
-        </td>
+        <td style="padding:6px 8px;font-weight:700;white-space:nowrap;vertical-align:top;">${label}</td>
+        <td style="padding:6px 8px;vertical-align:top;">${slotCell('matin',matin,'07:00','12:00')}</td>
+        <td style="padding:6px 8px;vertical-align:top;">${slotCell('tranche',tranche,'—','—')}</td>
+        <td style="padding:6px 8px;vertical-align:top;">${slotCell('soir',soir,'12:00','22:00')}</td>
       </tr>`;
     }).join('')}
     </tbody>
@@ -1754,12 +1758,13 @@ function getAllTasks(rid){
     if(t.freq==='A')return true; // annuel = toujours visible
     return true;
   })].map(t=>{
-    // ── Permanencier Tranche : l'horaire est variable, fixé au jour le jour via le
-    // Planning de Permanence (Réglages). On substitue la deadline statique (absente
-    // sur les tâches prédéfinies) par l'heure de fin du planning du jour, propageant
-    // ainsi automatiquement le badge horaire, le blocage de saisie et les rapports.
-    if(rid==='perm_tranche'){
-      return {...t, deadline:getPermanenceTrancheFinToday()||''};
+    // ── Permanence (Matin/Soir/Tranche) : l'horaire est désormais TOUJOURS variable,
+    // fixé au jour le jour via le Planning de Permanence (Réglages). On substitue la
+    // deadline statique (absente sur les tâches prédéfinies) par l'heure de fin
+    // planifiée du jour, propageant ainsi automatiquement le badge horaire, le
+    // blocage de saisie et les rapports — sans rien coder en dur.
+    if(isPermanenceRole(rid)){
+      return {...t, deadline:getPermanenceDeadlineToday(rid)};
     }
     return t;
   });
@@ -1778,53 +1783,80 @@ const PERM_SLOT_OF_ROLE={perm_matin:'matin',perm_soir:'soir',perm_tranche:'tranc
 function isPermanenceRole(rid){return PERM_ROLE_IDS.includes(rid);}
 // Accès automatique : vrai si CET utilisateur est désigné dans le planning d'AUJOURD'HUI
 // pour ce créneau — donne accès à la checklist sans passer par Gestion des utilisateurs.
-// - Matin / Soir : accès toute la journée (la deadline 12h/22h gère déjà la ponctualité).
-// - Tranche : accès UNIQUEMENT entre l'heure de début et l'heure de fin du planning,
-//   car l'horaire est variable d'un jour à l'autre (ex. cette semaine 13h-19h, la
-//   semaine prochaine 15h-21h selon ce que l'admin a saisi dans le Planning).
-// L'accès expire de lui-même (recalculé à chaque appel sur l'heure et la date actuelles) —
-// aucune case de Gestion des utilisateurs à cocher/décocher, jamais.
-function isAssignedToPermanenceToday(roleId,userId){
-  const slot=PERM_SLOT_OF_ROLE[roleId];
-  if(!slot||!userId)return false;
-  const plan=permanencePlanning[todayKey()];
-  const entry=plan&&plan[slot];
-  if(!entry||entry.userId!==userId)return false;
-  if(roleId==='perm_tranche'&&entry.heureDebut&&entry.heureFin){
-    const now=new Date();
-    const nowMin=now.getHours()*60+now.getMinutes();
-    const [dh,dm]=entry.heureDebut.split(':').map(Number);
-    const [fh,fm]=entry.heureFin.split(':').map(Number);
-    return nowMin>=(dh*60+dm)&&nowMin<=(fh*60+fm);
-  }
-  return true;
-}
+// Horaires DÉSORMAIS ENTIÈREMENT VARIABLES pour les 3 créneaux (Matin/Soir/Tranche) :
+// l'admin saisit heureDebut/heureFin dans le Planning, jour par jour — par exemple
+// Matin 07:00-14:30, Tranche 14:30-16:30, Soir 16:30-23:00 une semaine, et des horaires
+// différents la semaine suivante. Le Soir peut traverser minuit (ex: 22:00-00:30) :
+// géré ci-dessous via getPermanenceActiveEntry().
+// Accès : aucune case de Gestion des utilisateurs à cocher/décocher, jamais — tout
+// part du Planning et se recalcule à chaque appel sur l'heure et la date actuelles.
 function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return d.toISOString().slice(0,10);}
 function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
-function getPermanenceTrancheFinToday(){
-  const plan=permanencePlanning[todayKey()];
-  return (plan&&plan.tranche&&plan.tranche.heureFin)||'';
+function _permMinutes(hhmm){const[h,m]=hhmm.split(':').map(Number);return h*60+m;}
+// Vrai si la fenêtre [heureDebut,heureFin] d'une entrée de planning traverse minuit
+// (ex: 22:00 → 00:30, ou 23:00 → 06:00).
+function permWindowCrossesMidnight(entry){
+  if(!entry||!entry.heureDebut||!entry.heureFin)return false;
+  return _permMinutes(entry.heureFin)<_permMinutes(entry.heureDebut);
 }
-function getPermanenceAssignedName(roleId){
+// Renvoie l'entrée de planning ACTIVE en ce moment précis pour ce rôle (gère le
+// passage à minuit : une fenêtre commencée hier soir et finissant après minuit reste
+// "active" jusqu'à son heureFin, même si la date du jour a déjà changé).
+function getPermanenceActiveEntry(roleId){
   const slot=PERM_SLOT_OF_ROLE[roleId];
   if(!slot)return null;
-  const plan=permanencePlanning[todayKey()];
+  const nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+  const eToday=(permanencePlanning[todayKey()]||{})[slot];
+  const eHier=(permanencePlanning[dateKeyMinus(1)]||{})[slot];
+  // 1) La fenêtre d'hier traverse-t-elle minuit et déborde-t-elle encore sur ce matin ?
+  if(eHier&&eHier.userId&&permWindowCrossesMidnight(eHier)&&nowMin<=_permMinutes(eHier.heureFin)){
+    return eHier;
+  }
+  // 2) L'entrée d'aujourd'hui est-elle actuellement dans sa fenêtre ?
+  if(eToday&&eToday.userId){
+    if(!eToday.heureDebut||!eToday.heureFin)return eToday; // pas d'horaire précisé -> actif toute la journée
+    const debutMin=_permMinutes(eToday.heureDebut),finMin=_permMinutes(eToday.heureFin);
+    if(finMin>=debutMin){ if(nowMin>=debutMin&&nowMin<=finMin)return eToday; }
+    else { if(nowMin>=debutMin)return eToday; } // traverse minuit, encore avant minuit aujourd'hui
+  }
+  return null;
+}
+function isAssignedToPermanenceToday(roleId,userId){
+  if(!userId)return false;
+  const e=getPermanenceActiveEntry(roleId);
+  return !!(e&&e.userId===userId);
+}
+// Deadline du jour pour le badge ponctualité 🟢/🔴 et le blocage de saisie.
+// Si la fenêtre traverse minuit, on ne peut pas exprimer une deadline "lendemain" dans
+// le format HH:MM utilisé partout dans l'appli (comparaison simple sur l'heure du
+// jour) — dans ce cas précis, on n'affiche pas de badge de ponctualité plutôt que de
+// risquer un badge incohérent ; l'ACCÈS reste néanmoins correctement géré ci-dessus.
+function getPermanenceDeadlineToday(roleId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  const entry=(permanencePlanning[todayKey()]||{})[slot];
+  if(!entry||!entry.heureFin)return '';
+  if(permWindowCrossesMidnight(entry))return ''; // traverse minuit -> pas de badge de ponctualité
+  return entry.heureFin;
+}
+function getPermanenceAssignedNameForDate(roleId,dateStr){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return null;
+  const plan=permanencePlanning[dateStr];
   const entry=plan&&plan[slot];
   if(!entry||!entry.userId)return null;
   const u=usersData.find(x=>x.id===entry.userId);
   return u?u.name:null;
 }
-function getPermanenceHoraireLabel(roleId){
-  if(roleId==='perm_matin')return 'avant 12:00';
-  if(roleId==='perm_soir')return 'avant 22:00';
-  if(roleId==='perm_tranche'){
-    const plan=permanencePlanning[todayKey()];
-    const t=plan&&plan.tranche;
-    if(!t||!t.heureDebut||!t.heureFin)return null;
-    return `${t.heureDebut} – ${t.heureFin}`;
-  }
-  return null;
+function getPermanenceAssignedName(roleId){return getPermanenceAssignedNameForDate(roleId,todayKey());}
+function getPermanenceHoraireLabelForDate(roleId,dateStr){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return null;
+  const plan=permanencePlanning[dateStr];
+  const entry=plan&&plan[slot];
+  if(!entry||!entry.heureDebut||!entry.heureFin)return null;
+  return `${entry.heureDebut} – ${entry.heureFin}${permWindowCrossesMidnight(entry)?' (+1j)':''}`;
 }
+function getPermanenceHoraireLabel(roleId){return getPermanenceHoraireLabelForDate(roleId,todayKey());}
 // Note laissée par le créneau précédent, à l'attention du créneau courant
 function getPermanenceIncomingNote(roleId){
   const today=todayKey();
@@ -3251,7 +3283,7 @@ function buildDailyResults(dateStr){
       </div>`;
     }).join('');
     rolesHtml+=`<div class="res-role-row" style="flex-direction:column;align-items:stretch;">
-      <div style="display:flex;align-items:center;gap:6px;"><span class="res-role-icon">${r.icon}</span><span class="res-role-name">${r.label}</span><div class="res-role-bar-wrap" style="flex:1"><div class="res-role-bar" style="width:${rPct}%;background:${r.color}"></div></div><span class="res-role-pct" style="color:${rPc}">${rPct}%</span><span class="res-role-ct">${rd}/${totalRQ}</span></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span class="res-role-icon">${r.icon}</span><span class="res-role-name">${r.label}</span>${isPermanenceRole(r.id)?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:8px;background:${r.light};border:1px solid ${r.color};color:${r.color};">👤 ${getPermanenceAssignedNameForDate(r.id,dateStr)||'Non planifié'}${getPermanenceHoraireLabelForDate(r.id,dateStr)?' · '+getPermanenceHoraireLabelForDate(r.id,dateStr):''} · ${fmtDateStr(dateStr)}</span>`:''}<div class="res-role-bar-wrap" style="flex:1"><div class="res-role-bar" style="width:${rPct}%;background:${r.color}"></div></div><span class="res-role-pct" style="color:${rPc}">${rPct}%</span><span class="res-role-ct">${rd}/${totalRQ}</span></div>
       ${tasksDetail?`<div style="margin:6px 0 4px 28px;">${tasksDetail}</div>`:''}
     </div>`;
   });
@@ -3579,7 +3611,7 @@ function buildReportHTML(forPrint=false){
     const pct=tasks.length?Math.round(done/tasks.length*100):0,pctColor=pct>=80?"#1a7a40":pct>=50?"#b85c00":"#c0392b";
     const filteredTasks=tasks.filter(t=>(t._done&&showDone)||(!t._done&&showTodo));
     if(!filteredTasks.length&&!showDone&&!showTodo)return;
-    body+=`<div class="role-block"><div class="role-head" style="background:${r.light};border-left:4px solid ${r.color};"><span class="rh-icon">${r.icon}</span><span class="rh-name" style="color:${r.color};">${r.label}</span><span class="rh-sous">${r.sous}</span><span class="rh-pct" style="color:${pctColor};">${pct}%</span><span class="rh-ct">${done}/${tasks.length}</span></div>
+    body+=`<div class="role-block"><div class="role-head" style="background:${r.light};border-left:4px solid ${r.color};"><span class="rh-icon">${r.icon}</span><span class="rh-name" style="color:${r.color};">${r.label}</span>${isPermanenceRole(r.id)?`<span class="rh-perm-badge" style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:6px;background:#fff;border:1px solid ${r.color};color:${r.color};margin-right:6px;white-space:nowrap;">👤 ${getPermanenceAssignedNameForDate(r.id,chosenDate)||'Non planifié'} · ${fmtDateStr(chosenDate)}</span>`:''}<span class="rh-sous">${r.sous}</span><span class="rh-pct" style="color:${pctColor};">${pct}%</span><span class="rh-ct">${done}/${tasks.length}</span></div>
     ${filteredTasks.length===0?`<div class="no-task">Aucune tâche.</div>`:`<table><thead><tr><th style="width:22px;">✓</th><th>Tâche</th><th style="width:70px;">Fréq.</th>${showNote?`<th style="width:32%;">Consigne</th>`:""}</tr></thead><tbody>${filteredTasks.map((t,i)=>`<tr class="${i%2===0?'even':'odd'}"><td style="text-align:center;"><span class="chk" style="border-color:${t._done?r.color:"#ccc"};background:${t._done?r.color:"#fff"};">${t._done?"✓":""}</span></td><td style="color:${t._done?"#999":"#1a1f2e"};text-decoration:${t._done?"line-through":"none"};">${t.label}${buildReportNoteHtml(r.id,t.id,t.freq)}</td><td style="text-align:center;"><span class="fbadge" style="background:${FC[t.freq]}18;color:${FC[t.freq]};">${FL[t.freq]}</span></td>${showNote?`<td class="note-cell">${t.note||""}</td>`:""}</tr>`).join("")}</tbody></table>`}
     </div>`;
   });
