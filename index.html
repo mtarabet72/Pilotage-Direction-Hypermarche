@@ -1778,13 +1778,26 @@ const PERM_SLOT_OF_ROLE={perm_matin:'matin',perm_soir:'soir',perm_tranche:'tranc
 function isPermanenceRole(rid){return PERM_ROLE_IDS.includes(rid);}
 // Accès automatique : vrai si CET utilisateur est désigné dans le planning d'AUJOURD'HUI
 // pour ce créneau — donne accès à la checklist sans passer par Gestion des utilisateurs.
-// L'accès expire de lui-même le lendemain (recalculé à chaque appel sur todayKey()).
+// - Matin / Soir : accès toute la journée (la deadline 12h/22h gère déjà la ponctualité).
+// - Tranche : accès UNIQUEMENT entre l'heure de début et l'heure de fin du planning,
+//   car l'horaire est variable d'un jour à l'autre (ex. cette semaine 13h-19h, la
+//   semaine prochaine 15h-21h selon ce que l'admin a saisi dans le Planning).
+// L'accès expire de lui-même (recalculé à chaque appel sur l'heure et la date actuelles) —
+// aucune case de Gestion des utilisateurs à cocher/décocher, jamais.
 function isAssignedToPermanenceToday(roleId,userId){
   const slot=PERM_SLOT_OF_ROLE[roleId];
   if(!slot||!userId)return false;
   const plan=permanencePlanning[todayKey()];
   const entry=plan&&plan[slot];
-  return !!(entry&&entry.userId===userId);
+  if(!entry||entry.userId!==userId)return false;
+  if(roleId==='perm_tranche'&&entry.heureDebut&&entry.heureFin){
+    const now=new Date();
+    const nowMin=now.getHours()*60+now.getMinutes();
+    const [dh,dm]=entry.heureDebut.split(':').map(Number);
+    const [fh,fm]=entry.heureFin.split(':').map(Number);
+    return nowMin>=(dh*60+dm)&&nowMin<=(fh*60+fm);
+  }
+  return true;
 }
 function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return d.toISOString().slice(0,10);}
 function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
