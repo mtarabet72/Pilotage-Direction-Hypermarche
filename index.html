@@ -1639,14 +1639,16 @@ function isDirecteur(){return currentUser?.systemRole==='directeur';}
 function canEditRole(roleId){
   if(!currentUser)return false;
   if(isDirecteur())return true;
+  if(isPermanenceRole(roleId)&&isAssignedToPermanenceToday(roleId,currentUser.id))return true;
   return (currentUser.evaluableRoleIds||[]).includes(roleId)||(currentUser.ownRoleId===roleId);
 }
-function isOwnRole(roleId){return currentUser?.ownRoleId===roleId;}
+function isOwnRole(roleId){return currentUser?.ownRoleId===roleId||(isPermanenceRole(roleId)&&isAssignedToPermanenceToday(roleId,currentUser?.id));}
 function getAccessibleRoles(){
   if(!currentUser)return[];
   if(isDirecteur())return getAllRoles();
   const ids=new Set([...(currentUser.evaluableRoleIds||[])]);
   if(currentUser.ownRoleId)ids.add(currentUser.ownRoleId);
+  PERM_ROLE_IDS.forEach(rid=>{if(isAssignedToPermanenceToday(rid,currentUser.id))ids.add(rid);});
   return getAllRoles().filter(r=>ids.has(r.id));
 }
 function applyAccessControl(){
@@ -1774,6 +1776,16 @@ function getRoleStats(rid,freq="ALL"){
 const PERM_ROLE_IDS=['perm_matin','perm_soir','perm_tranche'];
 const PERM_SLOT_OF_ROLE={perm_matin:'matin',perm_soir:'soir',perm_tranche:'tranche'};
 function isPermanenceRole(rid){return PERM_ROLE_IDS.includes(rid);}
+// Accès automatique : vrai si CET utilisateur est désigné dans le planning d'AUJOURD'HUI
+// pour ce créneau — donne accès à la checklist sans passer par Gestion des utilisateurs.
+// L'accès expire de lui-même le lendemain (recalculé à chaque appel sur todayKey()).
+function isAssignedToPermanenceToday(roleId,userId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot||!userId)return false;
+  const plan=permanencePlanning[todayKey()];
+  const entry=plan&&plan[slot];
+  return !!(entry&&entry.userId===userId);
+}
 function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return d.toISOString().slice(0,10);}
 function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
 function getPermanenceTrancheFinToday(){
@@ -2001,13 +2013,8 @@ function showToast(msg,color='#1a1f2e'){
 function setDashPeriod(p,btn){dashPeriod=p;document.querySelectorAll(".period-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderDashboard();}
 function renderDashboard(){
   const isAdmin = isDirecteur();
-  // ── Rôles visibles selon profil ──
-  const visibleRoles = isAdmin
-    ? getAllRoles()
-    : getAllRoles().filter(r =>
-        (currentUser.evaluableRoleIds||[]).includes(r.id) ||
-        currentUser.ownRoleId === r.id
-      );
+  // ── Rôles visibles selon profil (source unique : inclut l'affectation de permanence du jour) ──
+  const visibleRoles = getAccessibleRoles();
 
   // ── Masquer "Par Rayon" pour non-admin ──
   const btnRayon = document.getElementById('view-mode-rayon');
@@ -2051,7 +2058,7 @@ function renderDashboard(){
       ${roles.map(r=>{
         const s=getRoleStats(r.id,dashPeriod),pct=s.pct,pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
         const tasks=getAllTasks(r.id).filter(t=>dashPeriod==="ALL"||t.freq===dashPeriod),isExp=expandedCards[r.id];
-        const isOwn=r.id===currentUser.ownRoleId;
+        const isOwn=isOwnRole(r.id);
         return `<div class="role-card${isExp?" expanded":""}" style="border-left-color:${r.color}" onclick="toggleCard('${r.id}')">
           <div class="rc-top"><span class="rc-icon">${r.icon}</span><span class="rc-name">${r.label}${isOwn?' <span style="font-size:9px;background:#eafaf1;color:#27ae60;padding:1px 6px;border-radius:8px;font-weight:700;">Mon rôle</span>':''}</span><span class="rc-pct" style="color:${pc}">${pct}%</span></div>
           <div class="rc-bar-wrap"><div class="rc-bar" style="width:${pct}%;background:${r.color}"></div></div>
