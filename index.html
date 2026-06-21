@@ -482,6 +482,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
       <span id="eval-banner-text">Mode Évaluation</span>
     </div>
     <div id="role-header"></div>
+    <div id="permanence-banner" style="display:none;"></div>
     <div class="view-mode-toggle">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Vue :</span>
       <button class="freq-btn" id="view-mode-role" onclick="setViewMode('role')" style="background:var(--accent);color:#fff;border-color:var(--accent);">👤 Par Fonction</button>
@@ -788,6 +789,18 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <div id="rayons-mgmt-list"></div>
   </div>
 
+  <!-- Planning de Permanence -->
+  <div class="settings-card" id="permanence-planning-card">
+    <h3>🕐 Planning de Permanence</h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      Affectez les responsables de permanence (Matin / Soir / Tranche) pour les 7 prochains jours. Le créneau Tranche a un horaire variable — définissez son début et sa fin pour chaque jour planifié.
+    </div>
+    <div style="overflow-x:auto;">
+      <div id="permanence-planning-table"></div>
+    </div>
+    <button class="btn-primary" onclick="savePermanencePlanningForm()" style="margin-top:14px;">💾 Enregistrer le planning</button>
+  </div>
+
   <!-- Gestion des utilisateurs (Directeur seulement) -->
   <div class="settings-card" id="users-mgmt-card">
     <h3>🔐 Gestion des Utilisateurs</h3>
@@ -873,6 +886,46 @@ const ROLES=[
   {secteur:"Services",id:"resp_logistique",label:"Responsable Logistique",sous:"Entrepôt & Réception",color:"#7f8c8d",light:"#f2f3f4",icon:"🚚",
    gere:["Manutentionnaires","Caristes","Réceptionnaires"],rayons:[],
    taches:[]},
+  // ── PERMANENCE MAGASIN (Manager on Duty) ─────────────────────
+  // Rôle transversal et tournant : checklist indépendante des rayons.
+  // Le responsable du jour est désigné via le Planning de Permanence (Réglages),
+  // pas par une équipe fixe. Voir getPermanenceAssignedName().
+  {secteur:"Permanence",id:"perm_matin",label:"Permanencier Matin",sous:"Continuité Magasin · avant 12:00",color:"#f39c12",light:"#fef9f0",icon:"🌅",
+   gere:[],rayons:[],
+   taches:[
+     {id:'perm_m01',freq:'Q',deadline:'12:00',label:"Lecture de la note de passation (Soir précédent)",note:"Continuité de service — Shift Handover Log, standard NRF/ISO 9001"},
+     {id:'perm_m02',freq:'Q',deadline:'12:00',label:"Tour d'ouverture complet — sécurité, accès, alarme",note:"Ronde sécurité ouverture — Document Unique (DUERP)"},
+     {id:'perm_m03',freq:'Q',deadline:'12:00',label:"Vérification présence encadrement par secteur",note:"Suivi effectifs cadres — continuité de direction"},
+     {id:'perm_m04',freq:'Q',deadline:'12:00',label:"Contrôle affichage prix et promotions du jour",note:"Conformité légale — Loi anti-fraude"},
+     {id:'perm_m05',freq:'Q',deadline:'12:00',label:"Validation ouverture des caisses et fonds de caisse",note:"Standard NRF POS"},
+     {id:'perm_m06',freq:'Q',deadline:'12:00',label:"Brief court avec les chefs de rayon présents",note:"Coordination matinale — NRF Daily Huddle"},
+     {id:'perm_m07',freq:'Q',deadline:'12:00',label:"Traitement des urgences et réclamations remontées",note:"Continuité de service client"},
+     {id:'perm_m08',freq:'Q',deadline:'12:00',label:"Contrôle températures chambres froides / surgelés",note:"HACCP CCP T° — si chef de secteur frais absent"},
+     {id:'perm_m09',freq:'Q',deadline:'12:00',label:"Rédaction de la note de passation pour la suite de la journée",note:"À transmettre au permanencier Tranche ou Soir"},
+   ]},
+  {secteur:"Permanence",id:"perm_soir",label:"Permanencier Soir",sous:"Continuité Magasin · avant 22:00",color:"#34495e",light:"#eaecee",icon:"🌙",
+   gere:[],rayons:[],
+   taches:[
+     {id:'perm_s01',freq:'Q',deadline:'22:00',label:"Lecture de la note de passation du créneau précédent",note:"Continuité de service — Shift Handover Log"},
+     {id:'perm_s02',freq:'Q',deadline:'22:00',label:"Ronde générale tous secteurs avant fermeture",note:"Store Walk transversal — pratique Gemba Walk"},
+     {id:'perm_s03',freq:'Q',deadline:'22:00',label:"Contrôle clôture caisses et arrêté journalier",note:"Comptage, écarts, validation — Procédure comptable"},
+     {id:'perm_s04',freq:'Q',deadline:'22:00',label:"Vérification fermeture issues, alarme, vidéosurveillance",note:"Sûreté fermeture — Standard Retail Loss Prevention"},
+     {id:'perm_s05',freq:'Q',deadline:'22:00',label:"Validation rangement réserve et zones de stockage",note:"Sécurité et accessibilité — GS1 Store Standards"},
+     {id:'perm_s06',freq:'Q',deadline:'22:00',label:"Rapport des incidents de la journée",note:"Vols, accidents, réclamations — Registre obligatoire"},
+     {id:'perm_s07',freq:'Q',deadline:'22:00',label:"Vérification présence agents de sécurité pour la nuit",note:"Continuité sûreté hors heures d'ouverture"},
+     {id:'perm_s08',freq:'Q',deadline:'22:00',label:"Rédaction de la note de passation pour le Matin suivant",note:"Transmission obligatoire — continuité J+1"},
+   ]},
+  {secteur:"Permanence",id:"perm_tranche",label:"Permanencier Tranche",sous:"Continuité Magasin · horaire variable",color:"#16a085",light:"#e8f8f5",icon:"🔄",
+   gere:[],rayons:[],
+   taches:[
+     {id:'perm_t01',freq:'Q',label:"Lecture de la note de passation (Matin)",note:"Continuité de service — Shift Handover Log"},
+     {id:'perm_t02',freq:'Q',label:"Tour de supervision des rayons sans encadrement présent",note:"Couverture des absences de chefs de rayon"},
+     {id:'perm_t03',freq:'Q',label:"Gestion des réclamations et incidents du créneau",note:"Escalade client — NPS Retail Standard"},
+     {id:'perm_t04',freq:'Q',label:"Contrôle des relais de pause déjeuner (caisses, rayons sensibles)",note:"Continuité de couverture sur les créneaux à risque"},
+     {id:'perm_t05',freq:'Q',label:"Vérification continuité affichage prix et balisage",note:"Conformité légale en continu"},
+     {id:'perm_t06',freq:'Q',label:"Suivi des ruptures signalées pendant le créneau",note:"Délai de réassort < 2h — ECR Out-of-Stock Standard"},
+     {id:'perm_t07',freq:'Q',label:"Rédaction de la note de passation pour le créneau suivant",note:"Transmission obligatoire — continuité de service"},
+   ]},
 ];
 
 
@@ -981,6 +1034,13 @@ const TASKS_LIBRARY = {
     {id:'lib_rh07',freq:'M',label:"Mise à jour dossiers du personnel",note:"Conformité RGPD, contrats, visites médicales"},
     {id:'lib_rh08',freq:'M',label:"Bilan formation et développement compétences",note:"CPF, plan formation, bilan pédagogique — Qualiopi"},
   ],
+  // ── PERMANENCE MAGASIN (Manager on Duty) ─────────────────────
+  permanence: [
+    {id:'lib_p01',freq:'Q',label:"Lecture de la note de passation du créneau précédent",note:"Continuité de service — Shift Handover Log"},
+    {id:'lib_p02',freq:'Q',label:"Ronde de supervision transversale tous secteurs",note:"Store Walk / Gemba Walk — continuité hors rayon"},
+    {id:'lib_p03',freq:'Q',label:"Gestion des réclamations et incidents remontés",note:"Escalade client — NPS Retail Standard"},
+    {id:'lib_p04',freq:'Q',label:"Rédaction de la note de passation pour le créneau suivant",note:"Transmission obligatoire — continuité de service"},
+  ],
 };
 
 // Catégories de la bibliothèque pour l'affichage
@@ -992,6 +1052,7 @@ const TASKS_LIBRARY_CATEGORIES = [
   {id:'securite',    label:'Sécurité & Prévention Pertes',   icon:'🛡️', color:'#8e44ad'},
   {id:'logistique',  label:'Logistique & Réception',         icon:'🚚', color:'#7f8c8d'},
   {id:'rh',          label:'Ressources Humaines',            icon:'👥', color:'#2c3e50'},
+  {id:'permanence',  label:'Permanence Magasin',             icon:'🕐', color:'#16a085'},
 ];
 
 let customRayons={};  // géré par l'admin, sauvegardé Supabase/localStorage
@@ -1004,12 +1065,16 @@ Object.defineProperty(window,'CONFIG_RAYONS',{get:()=>customRayons,set:(v)=>{cus
 // ══════════════════════════════════════════════════════════════
 const FC={Q:"#e74c3c",H:"#f39c12",M:"#27ae60",T:"#8e44ad",A:"#2c3e50"};
 const FL={Q:"Quotidien",H:"Hebdomadaire",M:"Mensuel",T:"Trimestriel",A:"Annuel"};
+// Ordre d'affichage des secteurs (Dashboard, Sidebar, Export, Gestion users...)
+const SECTEURS_ORDER=["Commercial","Services","Permanence"];
+function secteurIcon(secteur){return secteur==="Commercial"?"🛍️":secteur==="Permanence"?"🕐":"⚙️";}
 
 // Couleurs par rôle système
 const ROLE_COLORS={directeur:"#e63950",chef_secteur:"#2980b9",chef_rayon:"#27ae60"};
 const ROLE_LABELS={directeur:"Directeur (Admin)",chef_secteur:"Chef Secteur / Département",chef_rayon:"Chef de Rayon"};
 
 let completions={},customTasks={},completionLog=[],taskOverrides={},customRoles=[];
+let permanencePlanning={}; // Planning de permanence : { 'YYYY-MM-DD': { matin:{userId}, soir:{userId}, tranche:{userId,heureDebut,heureFin}, notes:{matin,soir,tranche} } }
 let taskNotes={}; // commentaires + pièces jointes par tâche : clé = ck(rid,tid,freq) → {comment,fileName,fileType,fileSize,fileData,userId,userName,updatedAt}
 const TASK_NOTE_MAX_WORDS=150;
 const TASK_FILE_MAX_BYTES=2*1024*1024; // 2 Mo
@@ -1046,6 +1111,7 @@ function loadData(){
   try{companyData=Object.assign({nom:"",logo:null,address:"",phone:"",email:"",web:"",directorName:"",directorTitle:"Directeur",directorPhone:"",directorEmail:"",orgName:"",orgRef:"",orgAddress:"",orgContact:"",orgPerson:""},JSON.parse(localStorage.getItem("hm_company")||"{}"));}catch(e){}
   try{usersData=JSON.parse(localStorage.getItem("hm_users")||"[]");}catch(e){usersData=[];}
   try{customRayons=JSON.parse(localStorage.getItem("hm_rayons")||"{}")||{};}catch(e){customRayons={};}  // rayons admin
+  try{permanencePlanning=JSON.parse(localStorage.getItem("hm_permanence_planning")||"{}")||{};}catch(e){permanencePlanning={};}
   // Toujours garantir le compte admin même si localStorage est bloqué
   const existingAdmin = usersData.find(u=>u.username==='admin');
   if(!existingAdmin){
@@ -1113,6 +1179,68 @@ function saveCustomRoles(){
   if(_sbClient && _fbConnected){
     _sb.set('hm_app_data','hm_custom_roles', customRoles).catch(()=>{});
   }
+}
+function savePermanencePlanning(){
+  try{localStorage.setItem("hm_permanence_planning", JSON.stringify(permanencePlanning));}catch(e){}
+  if(_sbClient && _fbConnected){
+    _sb.set('hm_app_data','hm_permanence_planning', permanencePlanning).catch(()=>{});
+  }
+}
+// ── Formulaire admin : Planning de Permanence (7 prochains jours) ──
+function renderPermanencePlanning(){
+  const el=document.getElementById('permanence-planning-table');
+  if(!el)return;
+  const users=usersData.filter(u=>u.active);
+  const userOptions=(selected)=>`<option value="">— Non assigné —</option>`+users.map(u=>`<option value="${u.id}"${u.id===selected?' selected':''}>${u.name}</option>`).join('');
+  const jours=[0,1,2,3,4,5,6].map(i=>dateKeyPlus(i));
+  const joursNomMap={0:'Dim',1:'Lun',2:'Mar',3:'Mer',4:'Jeu',5:'Ven',6:'Sam'};
+  el.innerHTML=`<table style="width:100%;border-collapse:collapse;min-width:640px;font-size:12px;">
+    <thead><tr style="text-align:left;border-bottom:2px solid var(--border);">
+      <th style="padding:6px 8px;">Jour</th>
+      <th style="padding:6px 8px;">🌅 Matin (avant 12h)</th>
+      <th style="padding:6px 8px;">🌙 Soir (avant 22h)</th>
+      <th style="padding:6px 8px;">🔄 Tranche</th>
+    </tr></thead>
+    <tbody>
+    ${jours.map((d,i)=>{
+      const dObj=new Date(d+'T12:00:00');
+      const label=`${joursNomMap[dObj.getDay()]} ${dObj.getDate()}/${dObj.getMonth()+1}${i===0?' <span style="color:var(--accent);font-weight:800;">(Aujourd\'hui)</span>':''}`;
+      const plan=permanencePlanning[d]||{};
+      const matin=plan.matin||{},soir=plan.soir||{},tranche=plan.tranche||{};
+      return `<tr style="border-bottom:1px solid #f0f2f5;" data-date="${d}">
+        <td style="padding:6px 8px;font-weight:700;white-space:nowrap;">${label}</td>
+        <td style="padding:6px 8px;"><select class="task-mgmt-role-select" style="margin:0;font-size:12px;" data-slot="matin" data-field="userId">${userOptions(matin.userId)}</select></td>
+        <td style="padding:6px 8px;"><select class="task-mgmt-role-select" style="margin:0;font-size:12px;" data-slot="soir" data-field="userId">${userOptions(soir.userId)}</select></td>
+        <td style="padding:6px 8px;">
+          <select class="task-mgmt-role-select" style="margin:0 0 4px;font-size:12px;" data-slot="tranche" data-field="userId">${userOptions(tranche.userId)}</select>
+          <div style="display:flex;gap:4px;">
+            <input type="time" value="${tranche.heureDebut||''}" data-slot="tranche" data-field="heureDebut" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
+            <input type="time" value="${tranche.heureFin||''}" data-slot="tranche" data-field="heureFin" style="flex:1;padding:5px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;">
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>`;
+}
+function savePermanencePlanningForm(){
+  const el=document.getElementById('permanence-planning-table');
+  if(!el)return;
+  el.querySelectorAll('tr[data-date]').forEach(tr=>{
+    const date=tr.dataset.date;
+    if(!permanencePlanning[date])permanencePlanning[date]={};
+    ['matin','soir','tranche'].forEach(slot=>{
+      if(!permanencePlanning[date][slot])permanencePlanning[date][slot]={};
+    });
+    tr.querySelectorAll('[data-slot]').forEach(input=>{
+      const slot=input.dataset.slot,field=input.dataset.field;
+      permanencePlanning[date][slot][field]=input.value||'';
+    });
+  });
+  savePermanencePlanning();
+  renderDashboard();
+  if(isPermanenceRole(currentRoleId))renderPermanenceBanner();
+  showToast('✅ Planning de permanence enregistré','#27ae60');
 }
 // ══════════════════════════════════════════════════════════════
 // GESTION DES DÉPARTEMENTS PERSONNALISÉS
@@ -1350,8 +1478,9 @@ function onLoginSuccess(){
         _sb.get('hm_app_data','hm_task_overrides'),
         _sb.get('hm_app_data','hm_custom_roles'),
         _sb.get('hm_app_data','hm_rayons'),
-        _sb.get('hm_app_data','hm_task_notes')
-      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons,tn])=>{
+        _sb.get('hm_app_data','hm_task_notes'),
+        _sb.get('hm_app_data','hm_permanence_planning')
+      ]).then(([sbUsers,rows,evtsResult,ct,ov,cr,sbRayons,tn,pp])=>{
         const evts={}; (evtsResult.data||[]).forEach(r=>{ if(r.data) evts[r.id]=r.data; });
         // Users : source de vérité Supabase
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
@@ -1399,6 +1528,10 @@ function onLoginSuccess(){
           taskNotes=tn;
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
         }
+        if(pp && typeof pp==='object'){
+          permanencePlanning=pp;
+          localStorage.setItem('hm_permanence_planning',JSON.stringify(permanencePlanning));
+        }
         renderRayonsList(); renderSelectRayon();
 
         // ── Migration one-shot : copier hm_completions → hm_history si hm_history vide ──
@@ -1430,8 +1563,9 @@ function onLoginSuccess(){
         _sb.get('hm_app_data','hm_custom_tasks'),
         _sb.get('hm_app_data','hm_task_overrides'),
         _sb.get('hm_app_data','hm_custom_roles'),
-        _sb.get('hm_app_data','hm_task_notes')
-      ]).then(([sbUsers,myComp, ct, ov, cr, tn])=>{
+        _sb.get('hm_app_data','hm_task_notes'),
+        _sb.get('hm_app_data','hm_permanence_planning')
+      ]).then(([sbUsers,myComp, ct, ov, cr, tn, pp])=>{
         // Mettre à jour la liste users (pour les noms dans les tâches assignées)
         if(sbUsers && Array.isArray(sbUsers) && sbUsers.length>0){
           const localById={};
@@ -1468,6 +1602,10 @@ function onLoginSuccess(){
         if(tn && typeof tn==='object'){
           taskNotes=tn;
           localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes));
+        }
+        if(pp && typeof pp==='object'){
+          permanencePlanning=pp;
+          localStorage.setItem('hm_permanence_planning',JSON.stringify(permanencePlanning));
         }
         renderSelectRayon();
         purgeOldDailyCompletions(true);
@@ -1568,7 +1706,7 @@ function showView(v){
   if(v==="tasks"){if(viewMode==='rayon'&&rayonActif){renderSidebar();afficherRayon(rayonActif);}else{renderSidebar();renderTaskView();}}
   if(v==="results")renderResults();
   if(v==="export")renderExportScope();
-  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();}
+  if(v==="settings"){renderSettingsForm();renderTaskMgmtRoleSelect();renderUsersList();renderFirebaseConfigForm();renderCustomRolesList();renderRayonsList();renderPermanencePlanning();}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1613,12 +1751,144 @@ function getAllTasks(rid){
     if(t.freq==='T')return true; // trimestriel = toujours visible
     if(t.freq==='A')return true; // annuel = toujours visible
     return true;
-  })];
+  })].map(t=>{
+    // ── Permanencier Tranche : l'horaire est variable, fixé au jour le jour via le
+    // Planning de Permanence (Réglages). On substitue la deadline statique (absente
+    // sur les tâches prédéfinies) par l'heure de fin du planning du jour, propageant
+    // ainsi automatiquement le badge horaire, le blocage de saisie et les rapports.
+    if(rid==='perm_tranche'){
+      return {...t, deadline:getPermanenceTrancheFinToday()||''};
+    }
+    return t;
+  });
 }
 function getRoleStats(rid,freq="ALL"){
   const tasks=getAllTasks(rid).filter(t=>freq==="ALL"||t.freq===freq);
   const done=tasks.filter(t=>isTaskDone(rid,t.id,t.freq)).length;
   return{done,total:tasks.length,pct:tasks.length?Math.round(done/tasks.length*100):0};
+}
+
+// ══════════════════════════════════════════════════════════════
+// PERMANENCE MAGASIN — Planning & Cahier de passation
+// ══════════════════════════════════════════════════════════════
+const PERM_ROLE_IDS=['perm_matin','perm_soir','perm_tranche'];
+const PERM_SLOT_OF_ROLE={perm_matin:'matin',perm_soir:'soir',perm_tranche:'tranche'};
+function isPermanenceRole(rid){return PERM_ROLE_IDS.includes(rid);}
+function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return d.toISOString().slice(0,10);}
+function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
+function getPermanenceTrancheFinToday(){
+  const plan=permanencePlanning[todayKey()];
+  return (plan&&plan.tranche&&plan.tranche.heureFin)||'';
+}
+function getPermanenceAssignedName(roleId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return null;
+  const plan=permanencePlanning[todayKey()];
+  const entry=plan&&plan[slot];
+  if(!entry||!entry.userId)return null;
+  const u=usersData.find(x=>x.id===entry.userId);
+  return u?u.name:null;
+}
+function getPermanenceHoraireLabel(roleId){
+  if(roleId==='perm_matin')return 'avant 12:00';
+  if(roleId==='perm_soir')return 'avant 22:00';
+  if(roleId==='perm_tranche'){
+    const plan=permanencePlanning[todayKey()];
+    const t=plan&&plan.tranche;
+    if(!t||!t.heureDebut||!t.heureFin)return null;
+    return `${t.heureDebut} – ${t.heureFin}`;
+  }
+  return null;
+}
+// Note laissée par le créneau précédent, à l'attention du créneau courant
+function getPermanenceIncomingNote(roleId){
+  const today=todayKey();
+  if(roleId==='perm_matin'){
+    // Note laissée hier soir par le permanencier Soir
+    const yPlan=permanencePlanning[dateKeyMinus(1)];
+    return (yPlan&&yPlan.notes&&yPlan.notes.soir)||'';
+  }
+  if(roleId==='perm_tranche'){
+    const plan=permanencePlanning[today];
+    return (plan&&plan.notes&&plan.notes.matin)||'';
+  }
+  if(roleId==='perm_soir'){
+    const plan=permanencePlanning[today];
+    // Si une Tranche était planifiée aujourd'hui, on lit sa note ; sinon celle du Matin
+    if(plan&&plan.tranche&&plan.tranche.userId)return (plan.notes&&plan.notes.tranche)||'';
+    return (plan&&plan.notes&&plan.notes.matin)||'';
+  }
+  return '';
+}
+function getPermanenceOutgoingNote(roleId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return '';
+  const plan=permanencePlanning[todayKey()];
+  return (plan&&plan.notes&&plan.notes[slot])||'';
+}
+function savePermanenceOutgoingNote(roleId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return;
+  const ta=document.getElementById('perm-note-out');
+  if(!ta)return;
+  const today=todayKey();
+  if(!permanencePlanning[today])permanencePlanning[today]={};
+  if(!permanencePlanning[today].notes)permanencePlanning[today].notes={};
+  permanencePlanning[today].notes[slot]=ta.value.trim();
+  savePermanencePlanning();
+  showToast('📝 Note de passation enregistrée','#27ae60');
+}
+// Bandeau affiché sous l'en-tête de rôle pour les 3 fonctions de Permanence
+function buildPermanenceBannerHtml(roleId){
+  const slotLabel=roleId==='perm_matin'?'Matin':roleId==='perm_soir'?'Soir':'Tranche';
+  const respName=getPermanenceAssignedName(roleId);
+  const horaire=getPermanenceHoraireLabel(roleId);
+  const incoming=getPermanenceIncomingNote(roleId);
+  const outgoing=getPermanenceOutgoingNote(roleId);
+  const canWrite=canEditRole(roleId)||isDirecteur();
+  return `
+  <div style="background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:${incoming||canWrite?'10px':'0'};">
+      <span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;background:#eef0f5;color:#1a1f2e;">👤 Responsable ${slotLabel} aujourd'hui : ${respName||'Non planifié'}</span>
+      ${horaire?`<span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;background:#fef9f0;color:#e67e22;">⏰ ${horaire}</span>`:roleId==='perm_tranche'?`<span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;background:#fdecea;color:#e74c3c;">⏰ Créneau non planifié — voir Réglages</span>`:''}
+    </div>
+    ${incoming?`<div style="font-size:12px;background:#eaf4fb;border-radius:8px;padding:8px 10px;margin-bottom:8px;"><strong>📥 Note du créneau précédent :</strong><br>${incoming.replace(/</g,'&lt;')}</div>`:''}
+    ${canWrite?`<div>
+      <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">📤 Note de passation pour le créneau suivant</label>
+      <textarea id="perm-note-out" rows="2" style="width:100%;box-sizing:border-box;border-radius:8px;border:1.5px solid var(--border);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;" placeholder="RAS, ou détails à transmettre...">${outgoing.replace(/</g,'&lt;')}</textarea>
+      <button class="btn-secondary" style="margin-top:6px;font-size:11px;padding:6px 12px;" onclick="savePermanenceOutgoingNote('${roleId}')">💾 Enregistrer la note</button>
+    </div>`:''}
+  </div>`;
+}
+function renderPermanenceBanner(){
+  const el=document.getElementById('permanence-banner');
+  if(!el)return;
+  if(isPermanenceRole(currentRoleId)&&viewMode==='role'){
+    el.innerHTML=buildPermanenceBannerHtml(currentRoleId);
+    el.style.display='block';
+  } else {
+    el.innerHTML='';
+    el.style.display='none';
+  }
+}
+// Mini-bandeau "Permanence du jour" affiché en tête du Dashboard
+function permanenceTodayBannerHtml(){
+  const visible=isDirecteur()?PERM_ROLE_IDS:PERM_ROLE_IDS.filter(id=>canEditRole(id));
+  if(!visible.length)return '';
+  const chips=visible.map(rid=>{
+    const r=getRole(rid);
+    if(!r)return '';
+    const name=getPermanenceAssignedName(rid);
+    const horaire=getPermanenceHoraireLabel(rid);
+    const s=getRoleStats(rid,'Q');
+    const pc=s.total===0?'#bbb':s.pct===100?'#27ae60':s.pct>=50?'#f39c12':'#e74c3c';
+    return `<div style="flex:1;min-width:150px;background:#fff;border-radius:10px;box-shadow:var(--shadow);padding:10px 12px;border-left:4px solid ${r.color};cursor:pointer;" onclick="viewMode='role';currentRoleId='${rid}';showView('tasks');">
+      <div style="font-size:11px;font-weight:800;color:${r.color};">${r.icon} ${r.label}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:3px;">${name||'<span style=\"color:#e74c3c\">Non planifié</span>'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">${horaire||'—'} · <span style="color:${pc};font-weight:800;">${s.done}/${s.total}</span></div>
+    </div>`;
+  }).join('');
+  return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">${chips}</div>`;
 }
 function getSecteurStats(secteur,freq="ALL"){
   const roles=getAllRoles().filter(r=>r.secteur===secteur);
@@ -1770,12 +2040,12 @@ function renderDashboard(){
       <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeVisRoles.length}</div></div>`;
 
     // Cards uniquement des rôles accessibles
-    let html="";
-    ["Commercial","Services"].forEach(secteur=>{
+    let html=permanenceTodayBannerHtml();
+    SECTEURS_ORDER.forEach(secteur=>{
       const roles=activeVisRoles.filter(r=>r.secteur===secteur);
       if(!roles.length)return;
       const sg=statsFor(roles,dashPeriod);
-      const icon=secteur==="Commercial"?"🛍️":"⚙️";
+      const icon=secteurIcon(secteur);
       const pctColor=sg.pct>=80?"#27ae60":sg.pct>=50?"#f39c12":"#e74c3c";
       html+=`<div class="secteur-block"><div class="secteur-head"><span class="sh-icon">${icon}</span><span class="sh-name">${secteur}</span><div><span class="sh-pct" style="color:${pctColor}">${sg.pct}%</span><span style="font-size:10px;color:var(--muted);margin-left:5px;">${sg.done}/${sg.total}</span></div></div><div class="roles-grid">
       ${roles.map(r=>{
@@ -1824,6 +2094,7 @@ function renderDashboard(){
   const g = statsFor(activeRoles, dashPeriod);
   const gc = statsFor(activeRoles.filter(r=>r.secteur==='Commercial'), dashPeriod);
   const gs = statsFor(activeRoles.filter(r=>r.secteur==='Services'), dashPeriod);
+  const gp = statsFor(activeRoles.filter(r=>r.secteur==='Permanence'), dashPeriod);
   const pl=dashPeriod==="Q"?`📅 ${fmtDate(new Date())}`:dashPeriod==="H"?`📅 Semaine ${weekKey()}`:dashPeriod==="M"?`📅 ${monthKey()}`:dashPeriod==="T"?`📊 ${quarterKey()}`:dashPeriod==="A"?`📅 Année ${yearKey()}`:`📅 ${monthKey()}`;
   document.getElementById("dash-period-label").textContent=pl;
   const rd=activeRoles.filter(r=>getRoleStats(r.id,dashPeriod).pct===100).length;
@@ -1831,12 +2102,13 @@ function renderDashboard(){
     <div class="sum-card" style="border-top-color:#e63950"><div class="sc-val" style="color:#e63950">${g.pct}%</div><div class="sc-label">Taux global</div><div class="sc-sub" style="color:#e63950">${g.done}/${g.total}</div></div>
     <div class="sum-card" style="border-top-color:#1a6b3c"><div class="sc-val" style="color:#1a6b3c">${gc.pct}%</div><div class="sc-label">Commercial</div><div class="sc-sub" style="color:#1a6b3c">${gc.done}/${gc.total}</div></div>
     <div class="sum-card" style="border-top-color:#2980b9"><div class="sc-val" style="color:#2980b9">${gs.pct}%</div><div class="sc-label">Services</div><div class="sc-sub" style="color:#2980b9">${gs.done}/${gs.total}</div></div>
+    ${gp.total>0?`<div class="sum-card" style="border-top-color:#16a085"><div class="sc-val" style="color:#16a085">${gp.pct}%</div><div class="sc-label">Permanence</div><div class="sc-sub" style="color:#16a085">${gp.done}/${gp.total}</div></div>`:''}
     <div class="sum-card" style="border-top-color:#27ae60"><div class="sc-val" style="color:#27ae60">${rd}</div><div class="sc-label">Fonctions à 100%</div><div class="sc-sub" style="color:#27ae60">sur ${activeRoles.length}</div></div>`;
-  let html="";
-  ["Commercial","Services"].forEach(secteur=>{
+  let html=permanenceTodayBannerHtml();
+  SECTEURS_ORDER.forEach(secteur=>{
     const roles=activeRoles.filter(r=>r.secteur===secteur);
     if(roles.length===0)return;
-    const sg=statsFor(roles,dashPeriod);const icon=secteur==="Commercial"?"🛍️":"⚙️";
+    const sg=statsFor(roles,dashPeriod);const icon=secteurIcon(secteur);
     const pctColor=sg.pct>=80?"#27ae60":sg.pct>=50?"#f39c12":"#e74c3c";
     html+=`<div class="secteur-block"><div class="secteur-head"><span class="sh-icon">${icon}</span><span class="sh-name">${secteur}</span><div><span class="sh-pct" style="color:${pctColor}">${sg.pct}%</span><span style="font-size:10px;color:var(--muted);margin-left:5px;">${sg.done}/${sg.total}</span></div></div><div class="roles-grid">
     ${roles.map(r=>{
@@ -1894,11 +2166,11 @@ function renderSidebar(){
     return;
   }
 
-  ["Commercial","Services"].forEach(secteur=>{
+  SECTEURS_ORDER.forEach(secteur=>{
     const sRoles=accessible.filter(r=>r.secteur===secteur);
     if(!sRoles.length)return;
     const sec=document.createElement("div");
-    sec.innerHTML=`<div style="padding:8px 14px 3px;font-size:9px;font-weight:800;color:var(--accent);letter-spacing:1.5px;text-transform:uppercase;background:#fef5f6">${secteur==="Commercial"?"🛍 "+secteur:"⚙️ "+secteur}</div>`;
+    sec.innerHTML=`<div style="padding:8px 14px 3px;font-size:9px;font-weight:800;color:var(--accent);letter-spacing:1.5px;text-transform:uppercase;background:#fef5f6">${secteurIcon(secteur)} ${secteur}</div>`;
     sb.appendChild(sec);
     sRoles.forEach(r=>{
       const s2=getRoleStats(r.id);
@@ -1933,7 +2205,7 @@ function renderTaskView(){
   // Add button: only for own role or directeur
   const canAdd=isDirecteur(); // Seul le Directeur peut créer des tâches
   document.getElementById('add-btn').style.display=canAdd?'block':'none';
-  renderRoleHeader();renderControls();renderTasks();renderProgressBar();
+  renderRoleHeader();renderControls();renderTasks();renderProgressBar();renderPermanenceBanner();
 }
 function renderRoleHeader(){
   const r=getRole(currentRoleId);const s=getRoleStats(currentRoleId);
@@ -2309,6 +2581,7 @@ function removeNoteFile(){
 // ══════════════════════════════════════════════════════════════
 function setViewMode(mode){
   viewMode=mode;
+  renderPermanenceBanner();
   document.getElementById('view-mode-role').style.background=mode==='role'?'var(--accent)':'#fff';
   document.getElementById('view-mode-role').style.color=mode==='role'?'#fff':'#555';
   document.getElementById('view-mode-role').style.borderColor=mode==='role'?'var(--accent)':'#ccc';
@@ -2698,14 +2971,14 @@ function openUserModal(userId=null){
   const rolesOptions=getAllRoles().map(r=>`<option value="${r.id}">${r.icon} ${r.label}</option>`).join('');
   const evalCheckboxes=`
     <div class="perm-grid" id="eval-perm-grid">
-      <div class="perm-section-title">🛍️ Commercial</div>
-      ${getAllRoles().filter(r=>r.secteur==='Commercial').map(r=>`
-        <label class="perm-item"><input type="checkbox" class="eval-chk" value="${r.id}" ${existing&&(existing.evaluableRoleIds||[]).includes(r.id)?'checked':''}>${r.icon} ${r.label}</label>
-      `).join('')}
-      <div class="perm-section-title">⚙️ Services</div>
-      ${getAllRoles().filter(r=>r.secteur==='Services').map(r=>`
-        <label class="perm-item"><input type="checkbox" class="eval-chk" value="${r.id}" ${existing&&(existing.evaluableRoleIds||[]).includes(r.id)?'checked':''}>${r.icon} ${r.label}</label>
-      `).join('')}
+      ${SECTEURS_ORDER.map(secteur=>{
+        const roles=getAllRoles().filter(r=>r.secteur===secteur);
+        if(!roles.length)return '';
+        return `<div class="perm-section-title">${secteurIcon(secteur)} ${secteur}</div>
+        ${roles.map(r=>`
+          <label class="perm-item"><input type="checkbox" class="eval-chk" value="${r.id}" ${existing&&(existing.evaluableRoleIds||[]).includes(r.id)?'checked':''}>${r.icon} ${r.label}</label>
+        `).join('')}`;
+      }).join('')}
     </div>`;
 
   document.getElementById('modal-body').innerHTML=`
@@ -3232,9 +3505,13 @@ function setExportType(t,btn){
 function renderExportScope(){
   const grid=document.getElementById("scope-grid");
   const allBtn=`<button class="scope-btn${scopeSet.has("ALL")?" active":""}" onclick="toggleScope('ALL',this)">🌐 Tout le magasin</button>`;
-  const com=getAllRoles().filter(r=>r.secteur==="Commercial").map(r=>`<button class="scope-btn${scopeSet.has(r.id)?" active":""}" onclick="toggleScope('${r.id}',this)">${r.icon} ${r.label}</button>`).join("");
-  const serv=getAllRoles().filter(r=>r.secteur==="Services").map(r=>`<button class="scope-btn${scopeSet.has(r.id)?" active":""}" onclick="toggleScope('${r.id}',this)">${r.icon} ${r.label}</button>`).join("");
-  grid.innerHTML=allBtn+`<div style="grid-column:1/-1;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:6px 0 2px">🛍 Commercial</div>`+com+`<div style="grid-column:1/-1;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:6px 0 2px">⚙️ Services</div>`+serv;
+  const groups=SECTEURS_ORDER.map(secteur=>{
+    const roles=getAllRoles().filter(r=>r.secteur===secteur);
+    if(!roles.length)return '';
+    const btns=roles.map(r=>`<button class="scope-btn${scopeSet.has(r.id)?" active":""}" onclick="toggleScope('${r.id}',this)">${r.icon} ${r.label}</button>`).join("");
+    return `<div style="grid-column:1/-1;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:6px 0 2px">${secteurIcon(secteur)} ${secteur}</div>`+btns;
+  }).join('');
+  grid.innerHTML=allBtn+groups;
 }
 function toggleScope(id,btn){
   if(id==="ALL"){scopeSet=scopeSet.has("ALL")?new Set():new Set(["ALL"]);}
@@ -3799,13 +4076,15 @@ async function initSupabase(cfg){
       _sb.get('hm_app_data','hm_company').catch(()=>null),
       _sb.get('hm_app_data','hm_rayons').catch(()=>null),
       _sb.get('hm_app_data','hm_task_notes').catch(()=>null),
-    ]).then(([cr,ct,ov,cd,ry,tn])=>{
+      _sb.get('hm_app_data','hm_permanence_planning').catch(()=>null),
+    ]).then(([cr,ct,ov,cd,ry,tn,pp])=>{
       if(cr && Array.isArray(cr) && cr.length>0){ customRoles=cr; localStorage.setItem('hm_custom_roles',JSON.stringify(cr)); renderCustomRolesList(); }
       if(ct && typeof ct==='object'){ customTasks=ct; localStorage.setItem('hm_cust',JSON.stringify(ct)); }
       if(ov && typeof ov==='object'){ taskOverrides=ov; localStorage.setItem('hm_overrides',JSON.stringify(ov)); }
       if(cd && typeof cd==='object'){ Object.assign(companyData,cd); localStorage.setItem('hm_company',JSON.stringify(companyData)); updateHeaderCompany(); }
       if(ry && typeof ry==='object' && Object.keys(ry).length>0){ customRayons=ry; localStorage.setItem('hm_rayons',JSON.stringify(ry)); renderRayonsList(); renderSelectRayon(); }
       if(tn && typeof tn==='object'){ taskNotes=tn; localStorage.setItem('hm_task_notes',JSON.stringify(tn)); renderTasks(); }
+      if(pp && typeof pp==='object'){ permanencePlanning=pp; localStorage.setItem('hm_permanence_planning',JSON.stringify(pp)); if(isDirecteur())renderPermanencePlanning(); renderDashboard(); }
     }).catch(()=>{});
 
     // ── Completions : admin fusionne tout, user charge les siennes ──
@@ -3968,6 +4247,16 @@ async function initSupabase(cfg){
           localStorage.setItem('hm_rayons',JSON.stringify(fresh));
           renderSelectRayon();
           if(isDirecteur()) renderRayonsList();
+        }
+      }
+      else if(key==='hm_permanence_planning'){
+        if(fresh && typeof fresh==='object'){
+          permanencePlanning=fresh;
+          localStorage.setItem('hm_permanence_planning',JSON.stringify(fresh));
+          // Ne pas re-rendre le bandeau de note de passation en direct : on éviterait
+          // ainsi d'effacer une note en cours de saisie par l'utilisateur courant.
+          renderDashboard();
+          if(isDirecteur()) renderPermanencePlanning();
         }
       }
     });
@@ -4462,6 +4751,18 @@ function startSupabasePoll(){
           if(isDirecteur()) renderRayonsList();
         }
       }
+      // Polling planning de permanence
+      const sbPerm = await _sb.get('hm_app_data','hm_permanence_planning').catch(()=>null);
+      if(sbPerm && typeof sbPerm==='object'){
+        const newHash = JSON.stringify(sbPerm);
+        if(newHash !== (window._sbPollPermPlanning||'')){
+          window._sbPollPermPlanning = newHash;
+          permanencePlanning = sbPerm;
+          localStorage.setItem('hm_permanence_planning', JSON.stringify(sbPerm));
+          renderDashboard();
+          if(isDirecteur()) renderPermanencePlanning();
+        }
+      }
 
       // ── Polling des completions (fallback si Realtime WS défaillant) ──
       // Stratégie : merge ADDITIF — on ajoute les coches manquantes, on ne supprime jamais une coche locale
@@ -4562,7 +4863,7 @@ function renderLivePanelFromEvents(evts){
 
     html+=`<div style="margin-bottom:16px;">
       <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
-        <span>${secteur==='Commercial'?'🛍️':'⚙️'} ${secteur}</span>
+        <span>${secteurIcon(secteur)} ${secteur}</span>
         <span style="font-size:12px;font-weight:900;color:${spctCol}">${spct}%</span>
       </div>`;
 
