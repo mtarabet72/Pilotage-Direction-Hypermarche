@@ -1660,6 +1660,16 @@ function getAccessibleRoles(){
 }
 // Rôles visibles dans Résultats et Export PDF : tout pour le Directeur, propres pour les autres.
 function getResultRoles(){return isDirecteur()?getAllRoles():getAccessibleRoles();}
+// Filtre supplémentaire : exclut les créneaux Permanence non assignés à la date donnée.
+// Ex : si seuls Matin et Soir sont planifiés ce jour (Tranche = aucun userId),
+// perm_tranche est retiré du calcul — ses tâches ne gonflent pas le taux global.
+function getResultRolesForDate(dateStr){
+  const d=dateStr||todayKey();
+  return getResultRoles().filter(r=>{
+    if(!isPermanenceRole(r.id))return true;          // rôle normal → toujours inclus
+    return !!getPermanenceAssignedNameForDate(r.id,d); // permanence → uniquement si userId planifié
+  });
+}
 function applyAccessControl(){
   // Hide/show tabs based on role
   const isDir=isDirecteur();
@@ -2086,12 +2096,12 @@ function _distinctPeriodReps(freq,datesArray){
 }
 // Somme done/total pour TOUTES les tâches d'une fréquence donnée, évaluées chacune
 // à une date représentative par occurrence dans repDates (une fois par sous-période).
+// Boucle date-first pour exclure les créneaux Permanence non assignés à chaque date.
 function _sumFreqAcrossDates(freq,repDates){
   let done=0,total=0;
-  getResultRoles().forEach(r=>{
-    const tasks=getAllTasks(r.id).filter(t=>t.freq===freq);
-    if(!tasks.length)return;
-    repDates.forEach(d=>{
+  repDates.forEach(d=>{
+    getResultRolesForDate(d).forEach(r=>{
+      const tasks=getAllTasks(r.id).filter(t=>t.freq===freq);
       tasks.forEach(t=>{total++;if(isTaskDoneForDateHist(r.id,t.id,freq,d))done++;});
     });
   });
@@ -3332,7 +3342,7 @@ function buildDailyResults(dateStr){
   const dayLabel=fmtDate(new Date(dateStr+'T00:00:00'));
   let totalQ=0,doneCount=0;
   const roleStats={};
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   _rRoles.forEach(r=>{
     const rTasks=getAllTasks(r.id).filter(t=>t.freq==='Q');
     // Utiliser completions (source de vérité) + fallback completionLog
@@ -3388,37 +3398,36 @@ function buildDailyResults(dateStr){
 }
 function buildCumulResults(dateStr){
   const weekDates=getWeekDates(dateStr);const today=todayKey();
-  const _rRoles=getResultRoles();
-  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
-  let daysHtml='',cumDone=0;
+  let daysHtml='',cumDone=0,cumTotal=0;
   weekDates.forEach((d,i)=>{
     const isFuture=d>today||d>dateStr;
-    // Compter via isTaskDoneForDateHist (completions synchronisé + archive Supabase),
-    // PAS via completionLog.filter() qui n'existe qu'en local sur cet appareil.
+    // Filtre Permanence PAR JOUR — exclut les créneaux non assignés pour cette date
+    const dayRoles=getResultRolesForDate(d);
+    const dayTotalQ=dayRoles.reduce((s,r)=>s+getAllTasks(r.id).filter(t=>t.freq==='Q').length,0);
+    // Compter via isTaskDoneForDateHist (completions synchronisé + archive Supabase)
     let done=0;
     if(!isFuture){
-      _rRoles.forEach(r=>{
+      dayRoles.forEach(r=>{
         getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
           if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
         });
       });
     }
-    const pct=totalQ?Math.round(done/totalQ*100):0;
+    const pct=dayTotalQ?Math.round(done/dayTotalQ*100):0;
     const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
-    if(!isFuture)cumDone+=done;
+    if(!isFuture){cumDone+=done;cumTotal+=dayTotalQ;}
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.4':''}"><span class="res-day-label">${days[i]} ${fmtDateStr(d)}${d===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
   });
+  const gPct=cumTotal?Math.round(cumDone/cumTotal*100):0;const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   const activeDates=weekDates.filter(d=>d<=today&&d<=dateStr);
-  const totalPossible=totalQ*activeDates.length;
-  const gPct=totalPossible?Math.round(cumDone/totalPossible*100):0;const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   return `<div class="res-card"><h3>📈 Cumulé semaine du ${fmtDateStr(weekDates[0])}</h3>
-    <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Taux cumulé</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2980b9">${cumDone}</div><div class="res-stat-lbl">Tâches réalisées</div></div><div class="res-stat"><div class="res-stat-val">${totalPossible}</div><div class="res-stat-lbl">Total attendu</div></div><div class="res-stat"><div class="res-stat-val" style="color:#8e44ad">${activeDates.length}</div><div class="res-stat-lbl">Jours actifs</div></div></div>
+    <div class="res-stat-grid"><div class="res-stat"><div class="res-stat-val" style="color:${gPc}">${gPct}%</div><div class="res-stat-lbl">Taux cumulé</div></div><div class="res-stat"><div class="res-stat-val" style="color:#2980b9">${cumDone}</div><div class="res-stat-lbl">Tâches réalisées</div></div><div class="res-stat"><div class="res-stat-val">${cumTotal}</div><div class="res-stat-lbl">Total attendu</div></div><div class="res-stat"><div class="res-stat-val" style="color:#8e44ad">${activeDates.length}</div><div class="res-stat-lbl">Jours actifs</div></div></div>
     ${daysHtml}</div>`;
 }
 function buildWeeklyResults(dateStr){
   const weekStr=weekKeyForDate(dateStr);const weekDates=getWeekDates(dateStr);const today=todayKey();
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   // Tâches H : utiliser completions comme source de vérité
   let totalH=0,doneH=0;
   _rRoles.forEach(r=>{
@@ -3427,23 +3436,25 @@ function buildWeeklyResults(dateStr){
     rH.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'H',dateStr))doneH++;});
   });
   const pctH=totalH?Math.round(doneH/totalH*100):0;
-  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',totalDoneQ=0,totalPossibleQ=0;
   weekDates.forEach((d,i)=>{
     const isFuture=d>today;
+    // Filtre Permanence PAR JOUR — exclut les créneaux non assignés pour cette date
+    const dayRoles=getResultRolesForDate(d);
+    const dayTotalQ=dayRoles.reduce((s,r)=>s+getAllTasks(r.id).filter(t=>t.freq==='Q').length,0);
     // Idem buildCumulResults : compter via isTaskDoneForDateHist (synchronisé),
     // pas via completionLog (local uniquement à cet appareil).
     let done=0;
     if(!isFuture){
-      _rRoles.forEach(r=>{
+      dayRoles.forEach(r=>{
         getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
           if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
         });
       });
     }
-    const pct=totalQ?Math.round(done/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
-    if(!isFuture){totalDoneQ+=done;totalPossibleQ+=totalQ;}
+    const pct=dayTotalQ?Math.round(done/dayTotalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
+    if(!isFuture){totalDoneQ+=done;totalPossibleQ+=dayTotalQ;}
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.4':''}"><span class="res-day-label">${days[i]} ${fmtDateStr(d)}${d===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${isFuture?'#ccc':pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
   });
   const gStats=getCumulStats('H',dateStr);
@@ -3494,7 +3505,7 @@ function buildMonthlyResults(dateStr){
   const d=new Date(dateStr+'T00:00:00');
   const monthLabel=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   const today=todayKey();
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   // Tâches M
   let totalM=0,doneM=0;
   _rRoles.forEach(r=>{
@@ -3503,15 +3514,16 @@ function buildMonthlyResults(dateStr){
     rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',dateStr))doneM++;});
   });
   const pctM=totalM?Math.round(doneM/totalM*100):0;
-  // Tâches Q : nbr de jours du mois passés
-  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  // Tâches Q : nbr de jours du mois passés — totalQ calculé PAR JOUR (Permanence date-aware)
   const daysInMonth=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
   let daysHtml='',totalDoneQ=0,totalPossQ=0;
   for(let i=1;i<=daysInMonth;i++){
     const dStr=`${monthStr}-${String(i).padStart(2,'0')}`;
     const isFuture=dStr>today;
-    let doneCnt=0;if(!isFuture){_rRoles.forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
-    const pct=totalQ?Math.round((isFuture?0:doneCnt)/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
+    const dayRoles=getResultRolesForDate(dStr);
+    const dayTotalQ=dayRoles.reduce((s,r)=>s+getAllTasks(r.id).filter(t=>t.freq==='Q').length,0);
+    let doneCnt=0;if(!isFuture){dayRoles.forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=dayTotalQ;}
+    const pct=dayTotalQ?Math.round((isFuture?0:doneCnt)/dayTotalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:90px;">${fmtDateStr(dStr)}${dStr===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
   }
   const gStats=getCumulStats('M',dateStr);
@@ -3542,7 +3554,7 @@ function buildQuarterlyResults(dateStr){
   const today=todayKey();
   const months=getYearDates(dateStr).filter(m=>Math.ceil(parseInt(m.slice(5,7))/3)===q);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   // Tâches T
   let totalT=0,doneT=0;
   _rRoles.forEach(r=>{
@@ -3593,7 +3605,7 @@ function buildSemesterResults(dateStr){
   const quarters=sNum===1?[1,2]:[3,4];
   const months=getSemesterMonths(dateStr);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   // Tâches S
   let totalS=0,doneS=0;
   _rRoles.forEach(r=>{
@@ -3641,7 +3653,7 @@ function buildAnnualResults(dateStr){
   const today=todayKey();
   const months=getYearDates(dateStr);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const _rRoles=getResultRoles();
+  const _rRoles=getResultRolesForDate(dateStr);
   // Tâches A
   let totalA=0,doneA=0;
   _rRoles.forEach(r=>{
@@ -3712,7 +3724,9 @@ function setExportType(t,btn){
 function renderExportScope(){
   const grid=document.getElementById("scope-grid");
   const isDir=isDirecteur();
-  const availableRoles=getResultRoles();
+  // Filtre Permanence par la date export : exclut les créneaux non assignés ce jour-là
+  const exportDate=getExportDateVal();
+  const availableRoles=getResultRolesForDate(exportDate);
   // Bouton "Tout" uniquement pour l'admin
   const allBtn=isDir
     ?`<button class="scope-btn${scopeSet.has("ALL")?" active":""}" onclick="toggleScope('ALL',this)">🌐 Tout le magasin</button>`
@@ -3736,7 +3750,8 @@ function toggleScope(id,btn){
   renderExportScope();
 }
 function getExportRoles(){
-  const accessible=getResultRoles();
+  // Filtre Permanence par la date export : créneaux non assignés exclus
+  const accessible=getResultRolesForDate(getExportDateVal());
   if(scopeSet.has("ALL"))return accessible;
   return accessible.filter(r=>scopeSet.has(r.id));
 }
