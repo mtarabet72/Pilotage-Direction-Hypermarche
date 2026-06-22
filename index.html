@@ -1658,6 +1658,8 @@ function getAccessibleRoles(){
   PERM_ROLE_IDS.forEach(rid=>{if(isAssignedToPermanenceToday(rid,currentUser.id))ids.add(rid);});
   return getAllRoles().filter(r=>ids.has(r.id));
 }
+// Rôles visibles dans Résultats et Export PDF : tout pour le Directeur, propres pour les autres.
+function getResultRoles(){return isDirecteur()?getAllRoles():getAccessibleRoles();}
 function applyAccessControl(){
   // Hide/show tabs based on role
   const isDir=isDirecteur();
@@ -2084,7 +2086,7 @@ function _distinctPeriodReps(freq,datesArray){
 // à une date représentative par occurrence dans repDates (une fois par sous-période).
 function _sumFreqAcrossDates(freq,repDates){
   let done=0,total=0;
-  getAllRoles().forEach(r=>{
+  getResultRoles().forEach(r=>{
     const tasks=getAllTasks(r.id).filter(t=>t.freq===freq);
     if(!tasks.length)return;
     repDates.forEach(d=>{
@@ -3328,7 +3330,8 @@ function buildDailyResults(dateStr){
   const dayLabel=fmtDate(new Date(dateStr+'T00:00:00'));
   let totalQ=0,doneCount=0;
   const roleStats={};
-  getAllRoles().forEach(r=>{
+  const _rRoles=getResultRoles();
+  _rRoles.forEach(r=>{
     const rTasks=getAllTasks(r.id).filter(t=>t.freq==='Q');
     // Utiliser completions (source de vérité) + fallback completionLog
     let rd=0;
@@ -3342,7 +3345,7 @@ function buildDailyResults(dateStr){
   const pct=totalQ?Math.round(doneCount/totalQ*100):0;
   const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
   let rolesHtml='';
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const {tasks:rTasks,logs:rLogs,done:rd}=roleStats[r.id]||{tasks:[],logs:[],done:0};
     const totalRQ=rTasks.length;
     const rPct=totalRQ?Math.round(rd/totalRQ*100):0;const rPc=rPct>=80?"#27ae60":rPct>=50?"#f39c12":"#e74c3c";
@@ -3383,7 +3386,8 @@ function buildDailyResults(dateStr){
 }
 function buildCumulResults(dateStr){
   const weekDates=getWeekDates(dateStr);const today=todayKey();
-  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  const _rRoles=getResultRoles();
+  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',cumDone=0;
   weekDates.forEach((d,i)=>{
@@ -3392,7 +3396,7 @@ function buildCumulResults(dateStr){
     // PAS via completionLog.filter() qui n'existe qu'en local sur cet appareil.
     let done=0;
     if(!isFuture){
-      getAllRoles().forEach(r=>{
+      _rRoles.forEach(r=>{
         getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
           if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
         });
@@ -3412,15 +3416,16 @@ function buildCumulResults(dateStr){
 }
 function buildWeeklyResults(dateStr){
   const weekStr=weekKeyForDate(dateStr);const weekDates=getWeekDates(dateStr);const today=todayKey();
+  const _rRoles=getResultRoles();
   // Tâches H : utiliser completions comme source de vérité
   let totalH=0,doneH=0;
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rH=getAllTasks(r.id).filter(t=>t.freq==='H');
     totalH+=rH.length;
     rH.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'H',dateStr))doneH++;});
   });
   const pctH=totalH?Math.round(doneH/totalH*100):0;
-  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   let daysHtml='',totalDoneQ=0,totalPossibleQ=0;
   weekDates.forEach((d,i)=>{
@@ -3429,7 +3434,7 @@ function buildWeeklyResults(dateStr){
     // pas via completionLog (local uniquement à cet appareil).
     let done=0;
     if(!isFuture){
-      getAllRoles().forEach(r=>{
+      _rRoles.forEach(r=>{
         getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{
           if(isTaskDoneForDateHist(r.id,t.id,'Q',d))done++;
         });
@@ -3448,7 +3453,7 @@ function buildWeeklyResults(dateStr){
     <div style="font-size:12px;font-weight:800;color:var(--muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tâches hebdomadaires</div>
     ${(()=>{
       let hDetailHtml='';
-      getAllRoles().forEach(r=>{
+      _rRoles.forEach(r=>{
         const rHLogs=completionLog.filter(e=>e.roleId===r.id&&e.freq==='H'&&e.period===weekStr);
         const rHTasks=getAllTasks(r.id).filter(t=>t.freq==='H');
         if(!rHTasks.length)return;
@@ -3487,22 +3492,23 @@ function buildMonthlyResults(dateStr){
   const d=new Date(dateStr+'T00:00:00');
   const monthLabel=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   const today=todayKey();
+  const _rRoles=getResultRoles();
   // Tâches M
   let totalM=0,doneM=0;
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
     totalM+=rM.length;
     rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',dateStr))doneM++;});
   });
   const pctM=totalM?Math.round(doneM/totalM*100):0;
   // Tâches Q : nbr de jours du mois passés
-  let totalQ=0;getAllRoles().forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
+  let totalQ=0;_rRoles.forEach(r=>{totalQ+=getAllTasks(r.id).filter(t=>t.freq==='Q').length;});
   const daysInMonth=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
   let daysHtml='',totalDoneQ=0,totalPossQ=0;
   for(let i=1;i<=daysInMonth;i++){
     const dStr=`${monthStr}-${String(i).padStart(2,'0')}`;
     const isFuture=dStr>today;
-    let doneCnt=0;if(!isFuture){getAllRoles().forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
+    let doneCnt=0;if(!isFuture){_rRoles.forEach(r=>getAllTasks(r.id).filter(t=>t.freq==='Q').forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'Q',dStr))doneCnt++;}));totalDoneQ+=doneCnt;totalPossQ+=totalQ;}
     const pct=totalQ?Math.round((isFuture?0:doneCnt)/totalQ*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     daysHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:90px;">${fmtDateStr(dStr)}${dStr===today?' 📍':''}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
   }
@@ -3511,7 +3517,7 @@ function buildMonthlyResults(dateStr){
   const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   // Détail tâches M par rôle
   let mDetailHtml='';
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rMTasks=getAllTasks(r.id).filter(t=>t.freq==='M');if(!rMTasks.length)return;
     let rd=0;rMTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',dateStr))rd++;});
     const rPct=rMTasks.length?Math.round(rd/rMTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
@@ -3534,9 +3540,10 @@ function buildQuarterlyResults(dateStr){
   const today=todayKey();
   const months=getYearDates(dateStr).filter(m=>Math.ceil(parseInt(m.slice(5,7))/3)===q);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _rRoles=getResultRoles();
   // Tâches T
   let totalT=0,doneT=0;
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rT=getAllTasks(r.id).filter(t=>t.freq==='T');
     totalT+=rT.length;
     rT.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',dateStr))doneT++;});
@@ -3547,7 +3554,7 @@ function buildQuarterlyResults(dateStr){
     const mDate=m+'-15'; // date représentative du mois
     const isFuture=m>today.slice(0,7);
     let mDone=0,mTotal=0;
-    getAllRoles().forEach(r=>{const rM=getAllTasks(r.id).filter(t=>t.freq==='M');mTotal+=rM.length;if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',mDate))mDone++;});});
+    _rRoles.forEach(r=>{const rM=getAllTasks(r.id).filter(t=>t.freq==='M');mTotal+=rM.length;if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',mDate))mDone++;});});
     const pct=mTotal?Math.round(mDone/mTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture){totalMDone+=mDone;totalMPoss+=mTotal;}
     monthsHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:100px;">${monthNames[parseInt(m.slice(5,7))]}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -3559,7 +3566,7 @@ function buildQuarterlyResults(dateStr){
   const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   // Détail tâches T
   let tDetailHtml='';
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rTTasks=getAllTasks(r.id).filter(t=>t.freq==='T');if(!rTTasks.length)return;
     let rd=0;rTTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',dateStr))rd++;});
     const rPct=rTTasks.length?Math.round(rd/rTTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
@@ -3584,9 +3591,10 @@ function buildSemesterResults(dateStr){
   const quarters=sNum===1?[1,2]:[3,4];
   const months=getSemesterMonths(dateStr);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _rRoles=getResultRoles();
   // Tâches S
   let totalS=0,doneS=0;
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rS=getAllTasks(r.id).filter(t=>t.freq==='S');
     totalS+=rS.length;
     rS.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'S',dateStr))doneS++;});
@@ -3597,7 +3605,7 @@ function buildSemesterResults(dateStr){
     const qDate=`${d.getFullYear()}-${String((q-1)*3+2).padStart(2,'0')}-15`; // mois médian du trimestre
     const isFuture=qDate.slice(0,7)>today.slice(0,7);
     let qDone=0,qTotal=0;
-    getAllRoles().forEach(r=>{const rT=getAllTasks(r.id).filter(t=>t.freq==='T');qTotal+=rT.length;if(!isFuture)rT.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',qDate))qDone++;});});
+    _rRoles.forEach(r=>{const rT=getAllTasks(r.id).filter(t=>t.freq==='T');qTotal+=rT.length;if(!isFuture)rT.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'T',qDate))qDone++;});});
     const pct=qTotal?Math.round(qDone/qTotal*100):0;const pc=pct>=80?"#27ae60":pct>=50?"#f39c12":"#e74c3c";
     if(!isFuture){totalTDone+=qDone;totalTPoss+=qTotal;}
     quartersHtml+=`<div class="res-day-row" style="${isFuture?'opacity:.35':''}"><span class="res-day-label" style="min-width:100px;">T${q} ${d.getFullYear()}</span><div class="res-day-bar-wrap"><div class="res-day-bar" style="width:${isFuture?0:pct}%;background:${pc}"></div></div><span class="res-day-pct" style="color:${isFuture?'#bbb':pc}">${isFuture?'—':pct+'%'}</span></div>`;
@@ -3609,7 +3617,7 @@ function buildSemesterResults(dateStr){
   const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   // Détail tâches S par rôle
   let sDetailHtml='';
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rSTasks=getAllTasks(r.id).filter(t=>t.freq==='S');if(!rSTasks.length)return;
     let rd=0;rSTasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'S',dateStr))rd++;});
     const rPct=rSTasks.length?Math.round(rd/rSTasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
@@ -3631,9 +3639,10 @@ function buildAnnualResults(dateStr){
   const today=todayKey();
   const months=getYearDates(dateStr);
   const monthNames=['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _rRoles=getResultRoles();
   // Tâches A
   let totalA=0,doneA=0;
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rA=getAllTasks(r.id).filter(t=>t.freq==='A');
     totalA+=rA.length;
     rA.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'A',dateStr))doneA++;});
@@ -3644,7 +3653,7 @@ function buildAnnualResults(dateStr){
     const mDate=m+'-15';
     const isFuture=m>today.slice(0,7);
     let mDone=0,mTotal=0;
-    getAllRoles().forEach(r=>{
+    _rRoles.forEach(r=>{
       const rM=getAllTasks(r.id).filter(t=>t.freq==='M');
       mTotal+=rM.length;
       if(!isFuture)rM.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'M',mDate))mDone++;});
@@ -3660,7 +3669,7 @@ function buildAnnualResults(dateStr){
   const gPc=gPct>=80?"#27ae60":gPct>=50?"#f39c12":"#e74c3c";
   // Détail tâches A par rôle
   let aDetailHtml='';
-  getAllRoles().forEach(r=>{
+  _rRoles.forEach(r=>{
     const rATasks=getAllTasks(r.id).filter(t=>t.freq==='A');if(!rATasks.length)return;
     let rd=0;rATasks.forEach(t=>{if(isTaskDoneForDateHist(r.id,t.id,'A',dateStr))rd++;});
     const rPct=rATasks.length?Math.round(rd/rATasks.length*100):0;const rPc=rPct>=80?'#27ae60':rPct>=50?'#f39c12':'#e74c3c';
@@ -3700,21 +3709,35 @@ function setExportType(t,btn){
 }
 function renderExportScope(){
   const grid=document.getElementById("scope-grid");
-  const allBtn=`<button class="scope-btn${scopeSet.has("ALL")?" active":""}" onclick="toggleScope('ALL',this)">🌐 Tout le magasin</button>`;
+  const isDir=isDirecteur();
+  const availableRoles=getResultRoles();
+  // Bouton "Tout" uniquement pour l'admin
+  const allBtn=isDir
+    ?`<button class="scope-btn${scopeSet.has("ALL")?" active":""}" onclick="toggleScope('ALL',this)">🌐 Tout le magasin</button>`
+    :`<button class="scope-btn${(scopeSet.has("ALL")||availableRoles.every(r=>scopeSet.has(r.id)))?" active":""}" onclick="toggleScopeAll(this)">👤 Mes fonctions</button>`;
   const groups=SECTEURS_ORDER.map(secteur=>{
-    const roles=getAllRoles().filter(r=>r.secteur===secteur);
+    const roles=availableRoles.filter(r=>r.secteur===secteur);
     if(!roles.length)return '';
     const btns=roles.map(r=>`<button class="scope-btn${scopeSet.has(r.id)?" active":""}" onclick="toggleScope('${r.id}',this)">${r.icon} ${r.label}</button>`).join("");
     return `<div style="grid-column:1/-1;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:6px 0 2px">${secteurIcon(secteur)} ${secteur}</div>`+btns;
   }).join('');
   grid.innerHTML=allBtn+groups;
 }
+function toggleScopeAll(btn){
+  // Sélectionner / désélectionner toutes les fonctions accessibles (non-admin)
+  scopeSet=new Set(["ALL"]);
+  renderExportScope();
+}
 function toggleScope(id,btn){
   if(id==="ALL"){scopeSet=scopeSet.has("ALL")?new Set():new Set(["ALL"]);}
   else{scopeSet.delete("ALL");if(scopeSet.has(id))scopeSet.delete(id);else scopeSet.add(id);if(scopeSet.size===0)scopeSet.add("ALL");}
   renderExportScope();
 }
-function getExportRoles(){if(scopeSet.has("ALL"))return getAllRoles();return getAllRoles().filter(r=>scopeSet.has(r.id));}
+function getExportRoles(){
+  const accessible=getResultRoles();
+  if(scopeSet.has("ALL"))return accessible;
+  return accessible.filter(r=>scopeSet.has(r.id));
+}
 function getExportFreq(){return exportType==="C"?null:exportType;}
 function getExportDateVal(){
   // Date choisie dans #date-daily, ou aujourd'hui par défaut
@@ -3814,6 +3837,7 @@ td{padding:4px 7px;vertical-align:top;border-bottom:1px solid #f0f2f5;line-heigh
     <div class="meta-item"><div class="meta-label">Période</div><div class="meta-val">${periodLabel}</div></div>
     <div class="meta-item"><div class="meta-label">Généré le</div><div class="meta-val">${now}</div></div>
     ${dirBlock}
+    ${!isDirecteur()&&currentUser?`<div class="meta-item"><div class="meta-label">Utilisateur</div><div class="meta-val">${currentUser.name}</div></div>`:''}
   </div>
   ${cd.orgName?`<div class="org-bar"><strong>Organisme :</strong> ${cd.orgName}${cd.orgRef?' ('+cd.orgRef+')':''}</div>`:''}
 </div>
