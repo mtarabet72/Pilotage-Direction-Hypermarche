@@ -1627,7 +1627,7 @@ function onLoginSuccess(){
   // NB: la demande de permission notifications se fait désormais via clic
   // explicite (bouton menu utilisateur) — un appel différé (setTimeout) est
   // silencieusement bloqué par les navigateurs car hors contexte de geste utilisateur.
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDateStr(new Date());
   if(document.getElementById("date-daily"))document.getElementById("date-daily").value=today;
   document.getElementById("date-from").value=today;
   document.getElementById("date-to").value=today;
@@ -1796,8 +1796,8 @@ function isPermanenceRole(rid){return PERM_ROLE_IDS.includes(rid);}
 // géré ci-dessous via getPermanenceActiveEntry().
 // Accès : aucune case de Gestion des utilisateurs à cocher/décocher, jamais — tout
 // part du Planning et se recalcule à chaque appel sur l'heure et la date actuelles.
-function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return d.toISOString().slice(0,10);}
-function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
+function dateKeyMinus(days){const d=new Date();d.setDate(d.getDate()-days);return localDateStr(d);}
+function dateKeyPlus(days){const d=new Date();d.setDate(d.getDate()+days);return localDateStr(d);}
 function _permMinutes(hhmm){const[h,m]=hhmm.split(':').map(Number);return h*60+m;}
 // Vrai si la fenêtre [heureDebut,heureFin] d'une entrée de planning traverse minuit
 // (ex: 22:00 → 00:30, ou 23:00 → 06:00).
@@ -1964,7 +1964,9 @@ function getGlobalStats(freq="ALL"){
   getAllRoles().forEach(r=>{const s=getRoleStats(r.id,freq);done+=s.done;total+=s.total;});
   return{done,total,pct:total?Math.round(done/total*100):0};
 }
-function todayKey(){return new Date().toISOString().slice(0,10);}
+// ── localDateStr : format YYYY-MM-DD en heure LOCALE (évite le décalage UTC de toISOString) ──
+function localDateStr(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
+function todayKey(){return localDateStr(new Date());}
 function weekKey(){const d=new Date(),j=new Date(d.getFullYear(),0,1);const w=Math.ceil(((d-j)/864e5+j.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,"0")}`;}
 function monthKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
 function quarterKey(){const d=new Date();const q=Math.ceil((d.getMonth()+1)/3);return `${d.getFullYear()}-T${q}`;}
@@ -2058,9 +2060,9 @@ function semesterKey(){const d=new Date();return `${d.getFullYear()}-S${d.getMon
 function semesterKeyForDate(s){const d=new Date(s+'T00:00:00');return `${d.getFullYear()}-S${d.getMonth()<6?1:2}`;}
 // Les 6 mois (YYYY-MM) du semestre contenant la date s
 function getSemesterMonths(s){const d=new Date(s+'T00:00:00');const y=d.getFullYear();const startM=d.getMonth()<6?0:6;const r=[];for(let i=0;i<6;i++)r.push(`${y}-${String(startM+i+1).padStart(2,'0')}`);return r;}
-function getQuarterDates(s){const d=new Date(s+'T00:00:00');const q=Math.ceil((d.getMonth()+1)/3);const startMonth=(q-1)*3;const start=new Date(d.getFullYear(),startMonth,1);const end=new Date(d.getFullYear(),startMonth+3,0);const r=[];for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1))r.push(dt.toISOString().slice(0,10));return r;}
+function getQuarterDates(s){const d=new Date(s+'T00:00:00');const q=Math.ceil((d.getMonth()+1)/3);const startMonth=(q-1)*3;const start=new Date(d.getFullYear(),startMonth,1);const end=new Date(d.getFullYear(),startMonth+3,0);const r=[];for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1))r.push(localDateStr(dt));return r;}
 function getYearDates(s){const y=parseInt(s.slice(0,4));const r=[];for(let m=0;m<12;m++){r.push(`${y}-${String(m+1).padStart(2,'0')}`);}return r;}
-function getWeekDates(s){const d=new Date(s+'T00:00:00'),day=d.getDay(),diff=day===0?-6:1-day,mon=new Date(d);mon.setDate(d.getDate()+diff);const r=[];for(let i=0;i<7;i++){const x=new Date(mon);x.setDate(mon.getDate()+i);r.push(x.toISOString().slice(0,10));}return r;}
+function getWeekDates(s){const d=new Date(s+'T00:00:00'),day=d.getDay(),diff=day===0?-6:1-day,mon=new Date(d);mon.setDate(d.getDate()+diff);const r=[];for(let i=0;i<7;i++){const x=new Date(mon);x.setDate(mon.getDate()+i);r.push(localDateStr(x));}return r;}
 
 // ══════════════════════════════════════════════════════════════
 // CUMUL ADDITIF DES RÉSULTATS — formule générique
@@ -3991,7 +3993,7 @@ async function downloadPDF(){
 
     const safe=(companyData.nom||'Rapport').replace(/[^a-z0-9À-ɏ]/gi,'_');
     const period=getExportPeriodLabel().replace(/[^a-z0-9À-ɏ]/gi,'_');
-    const date=new Date().toISOString().slice(0,10);
+    const date=localDateStr(new Date());
     pdf.save(safe+'_'+period+'_'+date+'.pdf');
 
     progBar.style.width='100%'; progText.textContent='✅ PDF téléchargé !';
@@ -4379,7 +4381,7 @@ async function initSupabase(cfg){
       if(_livePanel){ renderLivePanelFromEvents(evts); }
       renderTasks(); renderProgressBar(); renderDashboard();
       if(!_livePanel){
-        const today=new Date().toISOString().slice(0,10);
+        const today=localDateStr(new Date());
         const recent=Object.values(evts)
           .filter(e=>e&&e.period===today&&e.isDone)
           .sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
@@ -5043,7 +5045,7 @@ function renderLivePanelFromEvents(evts){
 
   // Trouver l'événement le plus récent pour l'horodatage
   const allEvts=Object.values(evts||{});
-  const todayStr=new Date().toISOString().slice(0,10);
+  const todayStr=localDateStr(new Date());
   // Filtrer sur la période d'aujourd'hui uniquement (Q)
   const todayEvts=allEvts.filter(e=>e && e.period===todayStr);
   const latestEvt=todayEvts.sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))[0];
@@ -5484,9 +5486,9 @@ function resetPeriodicData(){
 }
 
 // ── Veilleur minuit : vérifie toutes les 30 s si le jour a changé ──
-let _dailyWatcherDate=new Date().toISOString().slice(0,10);
+let _dailyWatcherDate=localDateStr(new Date());
 setInterval(function(){
-  const now=new Date().toISOString().slice(0,10);
+  const now=localDateStr(new Date());
   if(now!==_dailyWatcherDate){
     _dailyWatcherDate=now;
     localStorage.setItem('hm_last_reset',new Date().toDateString());
