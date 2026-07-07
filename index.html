@@ -1784,7 +1784,16 @@ function getAllTasks(rid){
       return {...t, deadline:getPermanenceDeadlineToday(rid)};
     }
     return t;
-  });
+  }).sort((a,b)=>_deadlineSortMinutes(a.deadline)-_deadlineSortMinutes(b.deadline));
+}
+// Tri chronologique des checklists : les tâches avec une heure limite (deadline)
+// s'affichent dans l'ordre croissant de cette heure ; celles sans heure définie sont
+// reléguées à la fin (Infinity), dans leur ordre relatif d'origine (tri stable).
+function _deadlineSortMinutes(d){
+  if(!d)return Infinity;
+  const [h,m]=d.split(':').map(Number);
+  if(isNaN(h)||isNaN(m))return Infinity;
+  return h*60+m;
 }
 function getRoleStats(rid,freq="ALL"){
   const tasks=getAllTasks(rid).filter(t=>freq==="ALL"||t.freq===freq);
@@ -1992,16 +2001,39 @@ function deadlinePeriodInfo(deadline){
   const isMatin=h<12||(h===12&&m===0);
   return isMatin?{emoji:'🌅',label:'Matin'}:{emoji:'🌙',label:'Soir'};
 }
+// ── Période effective d'une tâche Quotidienne pour un rôle de Permanence ──
+// Une case cochée par le Directeur (qui a accès à tout moment, contrairement au
+// permanencier lui-même) tôt après minuit doit continuer à se rattacher au service
+// d'HIER tant que le service d'AUJOURD'HUI pour ce même créneau n'a pas encore
+// démarré — que le créneau soit configuré comme traversant minuit (ex: 22:00→00:30)
+// ou non (ex: 16:30→23:00). Sans cela, une case cochée à 00:10 pour valider le
+// service de la veille (qui finissait à 23:00, donc "ne traverse pas minuit") était
+// enregistrée sous la date du NOUVEAU jour et apparaissait déjà "faite" sur la
+// checklist vierge du jour, avant même le début du service du soir suivant.
+function permanenceQPeriodKey(roleId){
+  const slot=PERM_SLOT_OF_ROLE[roleId];
+  if(!slot)return todayKey();
+  const eHier=(permanencePlanning[dateKeyMinus(1)]||{})[slot];
+  if(!eHier||!eHier.userId)return todayKey(); // rien de planifié hier -> pas de report possible
+  const eToday=(permanencePlanning[todayKey()]||{})[slot];
+  if(!eToday||!eToday.userId||!eToday.heureDebut)return todayKey(); // rien de planifié aujourd'hui -> retour à la date du jour
+  const nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+  if(nowMin<_permMinutes(eToday.heureDebut)) return dateKeyMinus(1); // le service d'aujourd'hui n'a pas encore démarré -> on est encore "hier"
+  return todayKey();
+}
+function effectivePeriodKey(rid,freq){
+  return (freq==='Q'&&isPermanenceRole(rid)) ? permanenceQPeriodKey(rid) : periodKey(freq);
+}
 function ck(rid,tid,freq){
   // Clé isolée par utilisateur : chaque user a ses propres completions
   const uid = currentUser ? currentUser.id : 'guest';
-  return `${uid}__${rid}__${tid}__${periodKey(freq)}`;
+  return `${uid}__${rid}__${tid}__${effectivePeriodKey(rid,freq)}`;
 }
 // Vérifie si une tâche est complétée (dashboard live) : UNIQUEMENT depuis completions
 // Pas de fallback completionLog — completions est la seule source de vérité du jour
 function isTaskDone(rid, tid, freq){
   if(isDirecteur()){
-    const suffix = '__'+rid+'__'+tid+'__'+periodKey(freq);
+    const suffix = '__'+rid+'__'+tid+'__'+effectivePeriodKey(rid,freq);
     return Object.keys(completions).some(k => k.endsWith(suffix) && completions[k]);
   }
   return !!completions[ck(rid,tid,freq)];
@@ -2010,7 +2042,7 @@ function isTaskDone(rid, tid, freq){
 function getTaskNote(rid,tid,freq){
   if(isDirecteur()){
     // Admin : retrouver la note écrite par n'importe quel user pour cette tâche/période
-    const suffix='__'+rid+'__'+tid+'__'+periodKey(freq);
+    const suffix='__'+rid+'__'+tid+'__'+effectivePeriodKey(rid,freq);
     const k=Object.keys(taskNotes).find(key=>key.endsWith(suffix));
     return k?taskNotes[k]:null;
   }
@@ -2018,7 +2050,7 @@ function getTaskNote(rid,tid,freq){
 }
 // Pour le rapport exporté : toujours retrouver la note quel que soit l'utilisateur qui génère le rapport
 function getTaskNoteAny(rid,tid,freq){
-  const suffix='__'+rid+'__'+tid+'__'+periodKey(freq);
+  const suffix='__'+rid+'__'+tid+'__'+effectivePeriodKey(rid,freq);
   const k=Object.keys(taskNotes).find(key=>key.endsWith(suffix));
   return k?taskNotes[k]:null;
 }
@@ -2213,7 +2245,7 @@ function renderDashboard(){
           <div class="rc-tasks-preview"><div style="font-size:10px;font-weight:700;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">Tâches</div>
           ${tasks.map(t=>{
             const done=completions[ck(r.id,t.id,t.freq)];
-            const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
+            const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===effectivePeriodKey(r.id,t.freq));
             let hBadge='';
             if(t.deadline){
               const lH=deadlinePeriodInfo(t.deadline).emoji;
@@ -2275,7 +2307,7 @@ function renderDashboard(){
         <div class="rc-tasks-preview"><div style="font-size:10px;font-weight:700;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">Tâches</div>
         ${tasks.map(t=>{
         const done=completions[ck(r.id,t.id,t.freq)];
-        const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===periodKey(t.freq));
+        const logEntry=completionLog.find(e=>e.taskId===t.id&&e.roleId===r.id&&e.period===effectivePeriodKey(r.id,t.freq));
         let horaireBadge='';
         if(t.deadline){
           const labelH=deadlinePeriodInfo(t.deadline).emoji;
@@ -2497,9 +2529,9 @@ function toggleTask(tid,freq){
   const r=getRole(currentRoleId);const task=getAllTasks(currentRoleId).find(t=>t.id===tid);
   const now=new Date();
   if(isDone&&task){
-    completionLog.push({roleId:currentRoleId,roleLabel:r.label,secteur:r.secteur,taskId:tid,taskLabel:task.label,freq,period:periodKey(freq),completedAt:now.toISOString(),evaluatedBy:currentUser?.id,userId:currentUser?.id});
+    completionLog.push({roleId:currentRoleId,roleLabel:r.label,secteur:r.secteur,taskId:tid,taskLabel:task.label,freq,period:effectivePeriodKey(currentRoleId,freq),completedAt:now.toISOString(),evaluatedBy:currentUser?.id,userId:currentUser?.id});
     if(completionLog.length>5000)completionLog=completionLog.slice(-5000);
-  } else {completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===tid&&e.period===periodKey(freq)&&e.userId===currentUser?.id));}
+  } else {completionLog=completionLog.filter(e=>!(e.roleId===currentRoleId&&e.taskId===tid&&e.period===effectivePeriodKey(currentRoleId,freq)&&e.userId===currentUser?.id));}
 
   // ── Sauvegarder : localStorage immédiat + Supabase si connecté ──
   try{
@@ -5438,13 +5470,31 @@ setInterval(checkUpcomingTaskNotifs, 30000);
 // RESET PÉRIODIQUE & INIT
 // ══════════════════════════════════════════════════════════════
 
+// Extrait le roleId d'une clé de complétion "uid__rid__tid__date" (aucun de ces
+// segments ne contient lui-même de double underscore dans cette appli).
+function _parseCompletionKeyRole(k){
+  const parts=k.split('__');
+  return parts.length>=4?parts[1]:null;
+}
+// Une clé datée d'HIER pour un rôle de Permanence doit être préservée si ce rôle est
+// ENCORE rattaché à la date d'hier par permanenceQPeriodKey() — c'est-à-dire tant que
+// le service d'AUJOURD'HUI pour ce même créneau n'a pas encore démarré (traversée de
+// minuit ou non). Une fois ce service démarré, permanenceQPeriodKey() retourne à
+// nouveau la date du jour et la clé "hier" redevient purgeable normalement.
+function _isPermanenceCarryoverKey(dateStr,rid){
+  if(!rid||dateStr!==dateKeyMinus(1))return false;
+  if(!isPermanenceRole(rid))return false;
+  return permanenceQPeriodKey(rid)===dateStr;
+}
 function purgeOldDailyCompletions(silent){
   const today=todayKey();
 
   // ── 1. Purge completions (RAM + localStorage) ──
   const keysToDelete=Object.keys(completions).filter(k=>{
     const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
-    return m && m[1]!==today;
+    if(!m||m[1]===today)return false;
+    if(_isPermanenceCarryoverKey(m[1],_parseCompletionKeyRole(k)))return false; // service Permanence encore en cours
+    return true;
   });
   keysToDelete.forEach(k=>delete completions[k]);
   const uid=currentUser?currentUser.id:'guest';
@@ -5458,7 +5508,8 @@ function purgeOldDailyCompletions(silent){
   const logBefore=completionLog.length;
   completionLog=completionLog.filter(e=>{
     if(e.freq!=='Q') return true; // garder hebdo/mensuel/etc.
-    return e.period===today;       // garder seulement les Q d'aujourd'hui
+    if(e.period===today) return true;
+    return _isPermanenceCarryoverKey(e.period,e.roleId); // service Permanence encore en cours
   });
   try{ localStorage.setItem('hm_log',JSON.stringify(completionLog)); }catch(e){}
   if(logBefore!==completionLog.length) console.log(`[Purge log] ${logBefore-completionLog.length} entrée(s) quotidienne(s) supprimée(s)`);
@@ -5474,7 +5525,7 @@ function purgeOldDailyCompletions(silent){
           const cleaned={};
           Object.keys(r.data).forEach(k=>{
             const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
-            if(!m||m[1]===today) cleaned[k]=r.data[k];
+            if(!m||m[1]===today||_isPermanenceCarryoverKey(m[1],_parseCompletionKeyRole(k))) cleaned[k]=r.data[k];
           });
           const rowUid=r.user_id||r.key;
           _sb.set('hm_completions',rowUid,cleaned).catch(()=>{});
