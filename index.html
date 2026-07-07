@@ -796,7 +796,12 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
   <div class="settings-card" id="permanence-planning-card">
     <h3>🕐 Planning de Permanence</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-      Affectez les responsables de permanence (Matin / Soir / Tranche) pour les 7 prochains jours. Le créneau Tranche a un horaire variable — définissez son début et sa fin pour chaque jour planifié.
+      Affectez les responsables de permanence (Matin / Soir / Tranche) mois par mois. Le créneau Tranche a un horaire variable — définissez son début et sa fin pour chaque jour planifié.
+    </div>
+    <div id="permanence-planning-nav" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;">
+      <button class="btn-secondary" onclick="changePlanningMonth(-1)" style="padding:6px 12px;">◀</button>
+      <span id="permanence-planning-month-label" style="font-weight:800;font-size:13.5px;min-width:150px;text-align:center;"></span>
+      <button class="btn-secondary" onclick="changePlanningMonth(1)" style="padding:6px 12px;">▶</button>
     </div>
     <div style="overflow-x:auto;">
       <div id="permanence-planning-table"></div>
@@ -1190,12 +1195,30 @@ function savePermanencePlanning(){
   }
 }
 // ── Formulaire admin : Planning de Permanence (7 prochains jours) ──
+let planningMonthOffset=0; // 0 = mois en cours, +1 = mois suivant, -1 = mois précédent, etc.
+const MOIS_NOMS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+function _planningTargetMonth(){
+  const d=new Date();
+  d.setDate(1); // éviter les débordements de fin de mois (ex: 31 mars +1 mois ≠ avril)
+  d.setMonth(d.getMonth()+planningMonthOffset);
+  return {year:d.getFullYear(),month:d.getMonth()}; // month: 0-11
+}
+function changePlanningMonth(delta){
+  savePermanencePlanningForm(true); // sauvegarde silencieuse des saisies en cours avant de changer de mois
+  planningMonthOffset+=delta;
+  renderPermanencePlanning();
+}
 function renderPermanencePlanning(){
   const el=document.getElementById('permanence-planning-table');
   if(!el)return;
   const users=usersData.filter(u=>u.active);
   const userOptions=(selected)=>`<option value="">— Non assigné —</option>`+users.map(u=>`<option value="${u.id}"${u.id===selected?' selected':''}>${u.name}</option>`).join('');
-  const jours=[0,1,2,3,4,5,6].map(i=>dateKeyPlus(i));
+  const {year,month}=_planningTargetMonth();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const jours=Array.from({length:daysInMonth},(_,i)=>localDateStr(new Date(year,month,i+1)));
+  const todayStr=todayKey();
+  const labelEl=document.getElementById('permanence-planning-month-label');
+  if(labelEl)labelEl.textContent=`${MOIS_NOMS[month]} ${year}`;
   const joursNomMap={0:'Dim',1:'Lun',2:'Mar',3:'Mer',4:'Jeu',5:'Ven',6:'Sam'};
   // Un bloc [responsable + heure début + heure fin] identique pour les 3 créneaux —
   // chaque jour peut avoir ses propres horaires (ex. Soir 22h00 certains jours, minuit d'autres).
@@ -1215,12 +1238,12 @@ function renderPermanencePlanning(){
       <th style="padding:6px 8px;">🌙 Soir</th>
     </tr></thead>
     <tbody>
-    ${jours.map((d,i)=>{
+    ${jours.map((d)=>{
       const dObj=new Date(d+'T12:00:00');
-      const label=`${joursNomMap[dObj.getDay()]} ${dObj.getDate()}/${dObj.getMonth()+1}${i===0?' <span style="color:var(--accent);font-weight:800;">(Aujourd\'hui)</span>':''}`;
+      const label=`${joursNomMap[dObj.getDay()]} ${dObj.getDate()}/${dObj.getMonth()+1}${d===todayStr?' <span style="color:var(--accent);font-weight:800;">(Aujourd\'hui)</span>':''}`;
       const plan=permanencePlanning[d]||{};
       const matin=plan.matin||{},soir=plan.soir||{},tranche=plan.tranche||{};
-      return `<tr style="border-bottom:1px solid #f0f2f5;" data-date="${d}">
+      return `<tr style="border-bottom:1px solid #f0f2f5;${d===todayStr?'background:#fff9e8;':''}" data-date="${d}">
         <td style="padding:6px 8px;font-weight:700;white-space:nowrap;vertical-align:top;">${label}</td>
         <td style="padding:6px 8px;vertical-align:top;">${slotCell('matin',matin,'07:00','12:00')}</td>
         <td style="padding:6px 8px;vertical-align:top;">${slotCell('tranche',tranche,'—','—')}</td>
@@ -1230,7 +1253,7 @@ function renderPermanencePlanning(){
     </tbody>
   </table>`;
 }
-function savePermanencePlanningForm(){
+function savePermanencePlanningForm(silent){
   const el=document.getElementById('permanence-planning-table');
   if(!el)return;
   el.querySelectorAll('tr[data-date]').forEach(tr=>{
@@ -1245,6 +1268,7 @@ function savePermanencePlanningForm(){
     });
   });
   savePermanencePlanning();
+  if(silent)return;
   renderDashboard();
   if(isPermanenceRole(currentRoleId))renderPermanenceBanner();
   showToast('✅ Planning de permanence enregistré','#27ae60');
@@ -5560,6 +5584,25 @@ function purgeOldDailyCompletions(silent){
       });
       localStorage.setItem('hm_events_local',JSON.stringify(cleanedEvts));
     }catch(e){}
+  }
+
+  // ── 5. Purge taskNotes (commentaires & pièces jointes — ex: "note de passation" du
+  // Permanencier) : stockage GLOBAL partagé (hm_app_data/hm_task_notes, pas de clé
+  // par utilisateur), jamais nettoyé jusqu'ici. Sans cette purge, un commentaire
+  // rédigé la veille reste indéfiniment dans le blob partagé et ré-apparaît à chaque
+  // synchronisation même après que sa clé de période a changé de jour. On applique
+  // la même protection de report (_isPermanenceCarryoverKey) que pour les completions.
+  const noteKeysToDelete=Object.keys(taskNotes).filter(k=>{
+    const m=k.match(/__(\d{4}-\d{2}-\d{2})$/);
+    if(!m||m[1]===today)return false;
+    if(_isPermanenceCarryoverKey(m[1],_parseCompletionKeyRole(k)))return false;
+    return true;
+  });
+  if(noteKeysToDelete.length){
+    noteKeysToDelete.forEach(k=>delete taskNotes[k]);
+    try{ localStorage.setItem('hm_task_notes',JSON.stringify(taskNotes)); }catch(e){}
+    if(_sbClient&&_fbConnected){ _sb.set('hm_app_data','hm_task_notes',taskNotes).catch(()=>{}); }
+    console.log(`[Purge notes] ${noteKeysToDelete.length} commentaire(s)/consigne(s) obsolète(s) supprimé(s)`);
   }
 
   console.log(`[Reset quotidien] ${keysToDelete.length} completion(s) purgée(s) — conservé: ${today}`);
