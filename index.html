@@ -784,10 +784,13 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
   <div class="settings-card" id="rayons-mgmt-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;">
       <h3 style="margin:0;">🏪 Gestion des Rayons Commerciaux</h3>
-      <button class="btn-primary" onclick="openRayonModal()" style="font-size:12px;padding:7px 16px;">➕ Ajouter un rayon</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="importRayonsStandard()" style="font-size:12px;padding:7px 16px;">📥 Importer les rayons (Tanger Médina)</button>
+        <button class="btn-primary" onclick="openRayonModal()" style="font-size:12px;padding:7px 16px;">➕ Ajouter un rayon</button>
+      </div>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
-      Créez et gérez les rayons commerciaux. Ils apparaîtront dans <strong>Suivi Tâches → Par Rayon</strong>.
+      Créez et gérez les rayons commerciaux. Ils apparaîtront dans <strong>Suivi Tâches → Par Rayon</strong>. Le bouton d'import crée automatiquement les 35 rayons standards (PGC, Produits Frais, Textile, Bazar, Électroménager) sans écraser ceux déjà existants.
     </div>
     <div id="rayons-mgmt-list"></div>
   </div>
@@ -2905,6 +2908,64 @@ function renderSelectRayon(){
   }
 }
 
+// ── Rayons standards Marjane Tanger Médina (plan magasin) ──
+// Import en masse : crée les rayons manquants sans écraser les modifications déjà
+// faites (chef/superviseur/tâches) sur un rayon existant portant le même numéro.
+const RAYONS_STANDARD=[
+  {numero:9,nom:'PARAPHARMACIE',departement:'PGC'},
+  {numero:10,nom:'LIQUIDE',departement:'PGC'},
+  {numero:11,nom:'EPICERIE',departement:'PGC'},
+  {numero:12,nom:'BISCUITERIE',departement:'PGC'},
+  {numero:13,nom:'ENTRETIEN',departement:'PGC'},
+  {numero:14,nom:'BEAUTE-SANTE',departement:'PGC'},
+  {numero:81,nom:'CHARCUTERIE',departement:'PRODUITS FRAIS'},
+  {numero:82,nom:'STAND',departement:'PRODUITS FRAIS'},
+  {numero:83,nom:'CREMERIE',departement:'PRODUITS FRAIS'},
+  {numero:84,nom:'SURGELE',departement:'PRODUITS FRAIS'},
+  {numero:80,nom:'STAND TRAITEUR',departement:'PRODUITS FRAIS'},
+  {numero:85,nom:'BOUCHERIE',departement:'PRODUITS FRAIS'},
+  {numero:86,nom:'VOLAILLE',departement:'PRODUITS FRAIS'},
+  {numero:87,nom:'BOULANGERIE',departement:'PRODUITS FRAIS'},
+  {numero:88,nom:'PATISSERIE',departement:'PRODUITS FRAIS'},
+  {numero:90,nom:'BOUL/PAT NEGOCE',departement:'PRODUITS FRAIS'},
+  {numero:89,nom:'POISSONNERIE',departement:'PRODUITS FRAIS'},
+  {numero:91,nom:'FRUITS ET LEGUM',departement:'PRODUITS FRAIS'},
+  {numero:92,nom:'PRODUITS VRACS',departement:'PRODUITS FRAIS'},
+  {numero:34,nom:'ENFANT',departement:'TEXTILE'},
+  {numero:35,nom:'BEBE',departement:'TEXTILE'},
+  {numero:36,nom:'FEMME',departement:'TEXTILE'},
+  {numero:37,nom:'HOMME',departement:'TEXTILE'},
+  {numero:38,nom:'CHAUSSURE',departement:'TEXTILE'},
+  {numero:39,nom:'TEXTILE DE MAISON',departement:'TEXTILE'},
+  {numero:40,nom:'MENAGE',departement:'BAZAR'},
+  {numero:41,nom:'AUTO.SANITAIRE',departement:'BAZAR'},
+  {numero:44,nom:'BRICO.ELEC',departement:'BAZAR'},
+  {numero:42,nom:'LOISIRS CULTURE',departement:'BAZAR'},
+  {numero:43,nom:'LOISIRS-EXTER',departement:'BAZAR'},
+  {numero:45,nom:'AMEUBLEMENT',departement:'BAZAR'},
+  {numero:50,nom:'IMAGE & SON',departement:'ELECTROMENAGER'},
+  {numero:51,nom:'ELECTRO MENAGER',departement:'ELECTROMENAGER'},
+  {numero:54,nom:'NOUVELLE TECHNOLOGIE',departement:'ELECTROMENAGER'},
+  {numero:65,nom:'AUTO STATION',departement:'ELECTROMENAGER'},
+];
+function importRayonsStandard(){
+  const existingNumeros=new Set(Object.values(customRayons).map(r=>r.numero));
+  const aCreer=RAYONS_STANDARD.filter(r=>!existingNumeros.has(r.numero));
+  if(!aCreer.length){ showToast('ℹ️ Tous les rayons standards existent déjà','#888'); return; }
+  if(!confirm(`Créer ${aCreer.length} rayon(s) manquant(s) (sur ${RAYONS_STANDARD.length}) ?\n\nLes rayons déjà existants (même numéro) ne seront pas modifiés.`))return;
+  aCreer.forEach(r=>{
+    const key=r.nom.toUpperCase().replace(/[^A-Z0-9]/g,'_').slice(0,20)+'_'+r.numero;
+    customRayons[key]={
+      nom:r.nom, numero:r.numero, departement:r.departement, secteur:'Commercial',
+      equipe:{chef:'À affecter',superviseur:'À affecter',employes:[]},
+      taches:[]
+    };
+  });
+  saveRayons();
+  renderRayonsList();
+  renderSelectRayon();
+  showToast(`✅ ${aCreer.length} rayon(s) créé(s)`,'#27ae60');
+}
 function renderRayonsList(){
   const el=document.getElementById('rayons-mgmt-list');
   if(!el) return;
