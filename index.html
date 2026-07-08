@@ -1281,7 +1281,7 @@ function savePermanencePlanningForm(silent){
   showToast('✅ Planning de permanence enregistré','#27ae60');
 }
 
-// ── Export PDF du Planning de Permanence (mois affiché, design moderne, 2 colonnes) ──
+// ── Export PDF du Planning de Permanence (mois affiché, design moderne, 2 colonnes, multi-page avec en-tête répété) ──
 async function exportPermanencePlanningPDF(){
   savePermanencePlanningForm(true); // sauvegarde silencieuse des saisies en cours
   if(typeof html2canvas==='undefined'||typeof window.jspdf==='undefined'){
@@ -1295,6 +1295,49 @@ async function exportPermanencePlanningPDF(){
   const btn=document.getElementById('btn-planning-pdf');
   if(btn){btn.disabled=true;btn.style.opacity='.6';btn.textContent='⏳ Génération...';}
   showToast('📄 Génération du PDF...','#2980b9');
+
+  const CONTAINER_W=1123; // px @96dpi ≈ 297mm = pleine largeur A4 paysage
+  const PAGE_W=297,PAGE_H=210;
+  const ROWS_PER_COL=13; // nb max de jours par colonne sur une page (2 colonnes → 26 jours/page)
+
+  const styleHtml=`<style>
+    .pp-page{width:${CONTAINER_W}px;background:#fff;font-family:'DM Sans',Arial,Helvetica,sans-serif;color:#1a1f2e;padding:18px 24px 14px;}
+    .pp-header{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0a1628,#0d3060);color:#fff;border-radius:10px;padding:13px 20px;margin-bottom:14px;}
+    .pp-header-left{display:flex;align-items:center;gap:12px;}
+    .pp-logo{height:40px;border-radius:6px;background:#fff;padding:3px;}
+    .pp-logo-fallback{font-size:26px;}
+    .pp-company{font-size:14px;font-weight:900;letter-spacing:.2px;}
+    .pp-title{font-size:11px;opacity:.85;margin-top:2px;font-weight:700;}
+    .pp-header-right{text-align:right;}
+    .pp-month{font-size:18px;font-weight:900;text-transform:capitalize;}
+    .pp-generated{font-size:9px;opacity:.65;margin-top:2px;}
+    .pp-pagenum{display:inline-block;font-size:9.5px;font-weight:800;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:5px;margin-top:4px;}
+    .pp-columns{display:flex;gap:16px;}
+    .pp-col{flex:1;min-width:0;}
+    .pp-table{width:100%;border-collapse:separate;border-spacing:0 4px;}
+    .pp-th-day{width:58px;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;color:#8892a4;}
+    .pp-th{font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;}
+    .pp-row{background:#f8f9fb;}
+    .pp-row td{padding:3px 6px;vertical-align:middle;border-top:1px solid #eef0f5;border-bottom:1px solid #eef0f5;}
+    .pp-row td:first-child{border-left:1px solid #eef0f5;border-radius:7px 0 0 7px;}
+    .pp-row td:last-child{border-right:1px solid #eef0f5;border-radius:0 7px 7px 0;}
+    .pp-weekend{background:#fff6ea;}
+    .pp-today{background:#fff3cd !important;}
+    .pp-today td{border-top:1.5px solid #f39c12 !important;border-bottom:1.5px solid #f39c12 !important;}
+    .pp-day-cell{width:58px;}
+    .pp-day-num{font-size:13.5px;font-weight:900;line-height:1.1;}
+    .pp-day-name{font-size:8px;color:#8892a4;font-weight:700;text-transform:uppercase;}
+    .pp-today-badge{display:inline-block;background:#f39c12;color:#fff;font-size:7px;font-weight:800;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:middle;}
+    .pp-slot{background:#fff;border-radius:6px;padding:3px 7px;min-height:24px;display:flex;flex-direction:column;justify-content:center;}
+    .pp-slot-name{font-size:10px;font-weight:800;color:#1a1f2e;line-height:1.2;}
+    .pp-slot-time{font-size:8px;color:#8892a4;font-weight:600;margin-top:1px;}
+    .pp-slot-empty{background:transparent;color:#c3c9d4;font-size:11px;font-weight:700;text-align:center;padding:3px 7px;min-height:24px;display:flex;align-items:center;justify-content:center;}
+    .pp-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:8px;border-top:1px solid #eef0f5;}
+    .pp-legend-item{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:#4a5568;}
+    .pp-legend-muted{color:#8892a4;font-weight:600;}
+    .pp-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+    *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+  </style>`;
 
   try{
     const {year,month}=_planningTargetMonth();
@@ -1340,13 +1383,21 @@ async function exportPermanencePlanningPDF(){
       }).join('')}
       </tbody></table>`;
 
-    const half=Math.ceil(jours.length/2);
-    const leftDays=jours.slice(0,half),rightDays=jours.slice(half);
     const cd=companyData;
     const logoHtml=cd.logo?`<img src="${cd.logo}" class="pp-logo" alt="Logo">`:`<div class="pp-logo-fallback">🏬</div>`;
     const genDate=new Date().toLocaleString('fr-FR',{dateStyle:'long',timeStyle:'short'});
 
-    const pageHtml=`<div class="pp-page">
+    // ── Découpage du mois en pages complètes (2 colonnes × ROWS_PER_COL jours max par page) ──
+    const perPage=ROWS_PER_COL*2;
+    const totalPages=Math.max(1,Math.ceil(jours.length/perPage));
+    const pageChunks=[];
+    for(let p=0;p<totalPages;p++){
+      const chunk=jours.slice(p*perPage,(p+1)*perPage);
+      const half=Math.ceil(chunk.length/2);
+      pageChunks.push({left:chunk.slice(0,half),right:chunk.slice(half)});
+    }
+
+    const buildPageHtml=(chunk,pageNum)=>`<div class="pp-page">
       <div class="pp-header">
         <div class="pp-header-left">
           ${logoHtml}
@@ -1358,11 +1409,12 @@ async function exportPermanencePlanningPDF(){
         <div class="pp-header-right">
           <div class="pp-month">${MOIS_NOMS[month]} ${year}</div>
           <div class="pp-generated">Généré le ${genDate}</div>
+          ${totalPages>1?`<div class="pp-pagenum">Page ${pageNum}/${totalPages}</div>`:''}
         </div>
       </div>
       <div class="pp-columns">
-        <div class="pp-col">${buildColumn(leftDays)}</div>
-        <div class="pp-col">${buildColumn(rightDays)}</div>
+        <div class="pp-col">${buildColumn(chunk.left)}</div>
+        <div class="pp-col">${buildColumn(chunk.right)}</div>
       </div>
       <div class="pp-legend">
         <span class="pp-legend-item"><span class="pp-dot" style="background:#f39c12;"></span>Matin</span>
@@ -1373,78 +1425,36 @@ async function exportPermanencePlanningPDF(){
       </div>
     </div>`;
 
-    const styleHtml=`<style>
-      .pp-page{width:1123px;background:#fff;font-family:'DM Sans',Arial,Helvetica,sans-serif;color:#1a1f2e;padding:20px 26px 18px;}
-      .pp-header{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0a1628,#0d3060);color:#fff;border-radius:10px;padding:16px 22px;margin-bottom:16px;}
-      .pp-header-left{display:flex;align-items:center;gap:14px;}
-      .pp-logo{height:46px;border-radius:6px;background:#fff;padding:3px;}
-      .pp-logo-fallback{font-size:30px;}
-      .pp-company{font-size:15px;font-weight:900;letter-spacing:.2px;}
-      .pp-title{font-size:12px;opacity:.85;margin-top:2px;font-weight:700;}
-      .pp-header-right{text-align:right;}
-      .pp-month{font-size:20px;font-weight:900;text-transform:capitalize;}
-      .pp-generated{font-size:9.5px;opacity:.65;margin-top:2px;}
-      .pp-columns{display:flex;gap:16px;}
-      .pp-col{flex:1;min-width:0;}
-      .pp-table{width:100%;border-collapse:separate;border-spacing:0 6px;}
-      .pp-th-day{width:64px;}
-      .pp-th{font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;}
-      .pp-th-day{font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;color:#8892a4;}
-      .pp-row{background:#f8f9fb;}
-      .pp-row td{padding:5px 6px;vertical-align:middle;border-top:1px solid #eef0f5;border-bottom:1px solid #eef0f5;}
-      .pp-row td:first-child{border-left:1px solid #eef0f5;border-radius:8px 0 0 8px;}
-      .pp-row td:last-child{border-right:1px solid #eef0f5;border-radius:0 8px 8px 0;}
-      .pp-weekend{background:#fff6ea;}
-      .pp-today{background:#fff3cd !important;}
-      .pp-today td{border-top:1.5px solid #f39c12 !important;border-bottom:1.5px solid #f39c12 !important;}
-      .pp-day-cell{width:64px;}
-      .pp-day-num{font-size:15px;font-weight:900;line-height:1.1;}
-      .pp-day-name{font-size:9px;color:#8892a4;font-weight:700;text-transform:uppercase;}
-      .pp-today-badge{display:inline-block;background:#f39c12;color:#fff;font-size:7.5px;font-weight:800;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:middle;}
-      .pp-slot{background:#fff;border-radius:6px;padding:4px 8px;min-height:30px;display:flex;flex-direction:column;justify-content:center;}
-      .pp-slot-name{font-size:11px;font-weight:800;color:#1a1f2e;line-height:1.25;}
-      .pp-slot-time{font-size:9px;color:#8892a4;font-weight:600;margin-top:1px;}
-      .pp-slot-empty{background:transparent;color:#c3c9d4;font-size:12px;font-weight:700;text-align:center;padding:4px 8px;min-height:30px;display:flex;align-items:center;justify-content:center;}
-      .pp-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid #eef0f5;}
-      .pp-legend-item{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:#4a5568;}
-      .pp-legend-muted{color:#8892a4;font-weight:600;}
-      .pp-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
-      *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
-    </style>`;
-
-    const CONTAINER_W=1123; // px @96dpi ≈ 297mm = pleine largeur A4 paysage
-    const container=document.createElement('div');
-    container.style.cssText=`position:fixed;left:-9999px;top:0;width:${CONTAINER_W}px;background:#fff;z-index:-1;`;
-    container.innerHTML=styleHtml+pageHtml;
-    document.body.appendChild(container);
-
-    await new Promise(res=>setTimeout(res,300)); // laisser le DOM se peindre (images, polices)
-
-    const target=container.querySelector('.pp-page');
-    const canvas=await html2canvas(target,{
-      scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false,
-      width:CONTAINER_W,windowWidth:CONTAINER_W
-    });
-    document.body.removeChild(container);
-
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
-    const PAGE_W=297,PAGE_H=210;
 
-    // Même méthode éprouvée que downloadPDF() : image pleine page, découpée en tranches si besoin
-    const pxPerMM=canvas.width/PAGE_W;
-    const pageHeightPx=Math.floor(PAGE_H*pxPerMM);
-    const totalPages=Math.max(1,Math.ceil(canvas.height/pageHeightPx));
+    for(let p=0;p<pageChunks.length;p++){
+      const container=document.createElement('div');
+      container.style.cssText=`position:fixed;left:-9999px;top:0;width:${CONTAINER_W}px;background:#fff;z-index:-1;`;
+      container.innerHTML=styleHtml+buildPageHtml(pageChunks[p],p+1);
+      document.body.appendChild(container);
 
-    for(let p=0;p<totalPages;p++){
+      await new Promise(res=>setTimeout(res,250)); // laisser le DOM se peindre (images, polices)
+
+      const canvas=await html2canvas(container.querySelector('.pp-page'),{
+        scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false,
+        width:CONTAINER_W,windowWidth:CONTAINER_W
+      });
+      document.body.removeChild(container);
+
+      const pxPerMM=canvas.width/PAGE_W;
+      const contentHmm=canvas.height/pxPerMM;
+
       if(p>0)pdf.addPage('a4','landscape');
-      const srcY=p*pageHeightPx, srcH=Math.min(pageHeightPx,canvas.height-srcY);
-      const pageCanvas=document.createElement('canvas');
-      pageCanvas.width=canvas.width; pageCanvas.height=pageHeightPx;
-      const ctx=pageCanvas.getContext('2d');
-      ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
-      ctx.drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
-      pdf.addImage(pageCanvas.toDataURL('image/jpeg',0.95),'JPEG',0,0,PAGE_W,PAGE_H,'p'+p,'FAST');
+      if(contentHmm<=PAGE_H){
+        // Le contenu tient dans la page → placé pleine largeur, aligné en haut (pas de déformation)
+        pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',0,0,PAGE_W,contentHmm,'p'+p,'FAST');
+      } else {
+        // Sécurité : si un contenu exceptionnel déborde malgré tout → réduction proportionnelle (jamais de coupe)
+        const scale=PAGE_H/contentHmm;
+        const imgW=PAGE_W*scale,imgH=PAGE_H;
+        pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',(PAGE_W-imgW)/2,0,imgW,imgH,'p'+p,'FAST');
+      }
     }
 
     const safe=(companyData.nom||'Hypermarche').replace(/[^a-z0-9À-ɏ]/gi,'_');
