@@ -1412,45 +1412,39 @@ async function exportPermanencePlanningPDF(){
       *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     </style>`;
 
+    const CONTAINER_W=1123; // px @96dpi ≈ 297mm = pleine largeur A4 paysage
     const container=document.createElement('div');
-    container.style.cssText='position:fixed;left:-9999px;top:0;background:#fff;z-index:-1;';
+    container.style.cssText=`position:fixed;left:-9999px;top:0;width:${CONTAINER_W}px;background:#fff;z-index:-1;`;
     container.innerHTML=styleHtml+pageHtml;
     document.body.appendChild(container);
 
     await new Promise(res=>setTimeout(res,300)); // laisser le DOM se peindre (images, polices)
 
     const target=container.querySelector('.pp-page');
-    const canvas=await html2canvas(target,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false});
+    const canvas=await html2canvas(target,{
+      scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false,
+      width:CONTAINER_W,windowWidth:CONTAINER_W
+    });
     document.body.removeChild(container);
 
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
-    const PAGE_W=297,PAGE_H=210,MARGIN=6;
-    const maxW=PAGE_W-MARGIN*2,maxH=PAGE_H-MARGIN*2;
-    const pxPerMM=canvas.width/ (target.offsetWidth/96*25.4); // px canvas par mm réel
-    const contentWmm=canvas.width/pxPerMM, contentHmm=canvas.height/pxPerMM;
+    const PAGE_W=297,PAGE_H=210;
 
-    if(contentHmm<=maxH){
-      // Tout tient sur une seule page → on centre l'image
-      const scale=Math.min(maxW/contentWmm,1);
-      const imgW=contentWmm*scale, imgH=contentHmm*scale;
-      const x=(PAGE_W-imgW)/2, y=MARGIN;
-      pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',x,y,imgW,imgH,'p0','FAST');
-    } else {
-      // Sécurité : contenu trop grand → découpage en plusieurs pages
-      const pageHeightPx=Math.floor(maxH*pxPerMM);
-      const totalPages=Math.max(1,Math.ceil(canvas.height/pageHeightPx));
-      for(let p=0;p<totalPages;p++){
-        if(p>0)pdf.addPage('a4','landscape');
-        const srcY=p*pageHeightPx, srcH=Math.min(pageHeightPx,canvas.height-srcY);
-        const pageCanvas=document.createElement('canvas');
-        pageCanvas.width=canvas.width; pageCanvas.height=pageHeightPx;
-        const ctx=pageCanvas.getContext('2d');
-        ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
-        ctx.drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
-        const imgW=maxW, imgH=(pageHeightPx/pxPerMM);
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg',0.95),'JPEG',MARGIN,MARGIN,imgW,imgH,'p'+p,'FAST');
-      }
+    // Même méthode éprouvée que downloadPDF() : image pleine page, découpée en tranches si besoin
+    const pxPerMM=canvas.width/PAGE_W;
+    const pageHeightPx=Math.floor(PAGE_H*pxPerMM);
+    const totalPages=Math.max(1,Math.ceil(canvas.height/pageHeightPx));
+
+    for(let p=0;p<totalPages;p++){
+      if(p>0)pdf.addPage('a4','landscape');
+      const srcY=p*pageHeightPx, srcH=Math.min(pageHeightPx,canvas.height-srcY);
+      const pageCanvas=document.createElement('canvas');
+      pageCanvas.width=canvas.width; pageCanvas.height=pageHeightPx;
+      const ctx=pageCanvas.getContext('2d');
+      ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
+      ctx.drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg',0.95),'JPEG',0,0,PAGE_W,PAGE_H,'p'+p,'FAST');
     }
 
     const safe=(companyData.nom||'Hypermarche').replace(/[^a-z0-9À-ɏ]/gi,'_');
