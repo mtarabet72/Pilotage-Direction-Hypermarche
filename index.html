@@ -809,8 +809,12 @@ input,select,textarea{font-family:'DM Sans',sans-serif;font-size:14px;}
     <div style="overflow-x:auto;">
       <div id="permanence-planning-table"></div>
     </div>
-    <button class="btn-primary" onclick="savePermanencePlanningForm()" style="margin-top:14px;">💾 Enregistrer le planning</button>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="savePermanencePlanningForm()">💾 Enregistrer le planning</button>
+      <button class="btn-secondary" id="btn-planning-pdf" onclick="exportPermanencePlanningPDF()">📄 Exporter en PDF</button>
+    </div>
   </div>
+
 
   <!-- Gestion des utilisateurs (Directeur seulement) -->
   <div class="settings-card" id="users-mgmt-card">
@@ -1276,6 +1280,190 @@ function savePermanencePlanningForm(silent){
   if(isPermanenceRole(currentRoleId))renderPermanenceBanner();
   showToast('✅ Planning de permanence enregistré','#27ae60');
 }
+
+// ── Export PDF du Planning de Permanence (mois affiché, design moderne, 2 colonnes) ──
+async function exportPermanencePlanningPDF(){
+  savePermanencePlanningForm(true); // sauvegarde silencieuse des saisies en cours
+  if(typeof html2canvas==='undefined'||typeof window.jspdf==='undefined'){
+    showToast('⏳ Chargement des librairies...','#2980b9');
+    await new Promise(res=>setTimeout(res,1200));
+  }
+  if(typeof html2canvas==='undefined'||typeof window.jspdf==='undefined'){
+    showToast('❌ Librairies PDF non disponibles. Vérifiez votre connexion.','#e74c3c');
+    return;
+  }
+  const btn=document.getElementById('btn-planning-pdf');
+  if(btn){btn.disabled=true;btn.style.opacity='.6';btn.textContent='⏳ Génération...';}
+  showToast('📄 Génération du PDF...','#2980b9');
+
+  try{
+    const {year,month}=_planningTargetMonth();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const jours=Array.from({length:daysInMonth},(_,i)=>localDateStr(new Date(year,month,i+1)));
+    const todayStr=todayKey();
+    const joursNomAbr={0:'Dim',1:'Lun',2:'Mar',3:'Mer',4:'Jeu',5:'Ven',6:'Sam'};
+    const nameFor=(id)=>{ if(!id)return null; const u=usersData.find(x=>x.id===id); return u?u.name:null; };
+
+    const slotHtml=(entry,color)=>{
+      const uname=nameFor(entry.userId);
+      if(!uname) return `<div class="pp-slot pp-slot-empty">—</div>`;
+      const hd=entry.heureDebut||'',hf=entry.heureFin||'';
+      const timeStr=(hd||hf)?`${hd||'--:--'} – ${hf||'--:--'}`:'Journée complète';
+      return `<div class="pp-slot" style="border-left:3px solid ${color};">
+        <div class="pp-slot-name">${uname}</div>
+        <div class="pp-slot-time">${timeStr}</div>
+      </div>`;
+    };
+
+    const buildColumn=(daysArr)=>`<table class="pp-table"><thead><tr>
+        <th class="pp-th-day">Jour</th>
+        <th class="pp-th" style="color:#f39c12;">🌅 Matin</th>
+        <th class="pp-th" style="color:#16a085;">🔄 Tranche</th>
+        <th class="pp-th" style="color:#34495e;">🌙 Soir</th>
+      </tr></thead><tbody>
+      ${daysArr.map(d=>{
+        const dObj=new Date(d+'T12:00:00');
+        const dow=dObj.getDay();
+        const isWeekend=dow===0||dow===6;
+        const isToday=d===todayStr;
+        const plan=permanencePlanning[d]||{};
+        const matin=plan.matin||{},tranche=plan.tranche||{},soir=plan.soir||{};
+        return `<tr class="pp-row${isWeekend?' pp-weekend':''}${isToday?' pp-today':''}">
+          <td class="pp-day-cell">
+            <div class="pp-day-num">${dObj.getDate()}</div>
+            <div class="pp-day-name">${joursNomAbr[dow]}${isToday?' <span class="pp-today-badge">Auj.</span>':''}</div>
+          </td>
+          <td>${slotHtml(matin,'#f39c12')}</td>
+          <td>${slotHtml(tranche,'#16a085')}</td>
+          <td>${slotHtml(soir,'#34495e')}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+
+    const half=Math.ceil(jours.length/2);
+    const leftDays=jours.slice(0,half),rightDays=jours.slice(half);
+    const cd=companyData;
+    const logoHtml=cd.logo?`<img src="${cd.logo}" class="pp-logo" alt="Logo">`:`<div class="pp-logo-fallback">🏬</div>`;
+    const genDate=new Date().toLocaleString('fr-FR',{dateStyle:'long',timeStyle:'short'});
+
+    const pageHtml=`<div class="pp-page">
+      <div class="pp-header">
+        <div class="pp-header-left">
+          ${logoHtml}
+          <div>
+            <div class="pp-company">${cd.nom||'Hypermarché'}</div>
+            <div class="pp-title">🕐 Planning de Permanence</div>
+          </div>
+        </div>
+        <div class="pp-header-right">
+          <div class="pp-month">${MOIS_NOMS[month]} ${year}</div>
+          <div class="pp-generated">Généré le ${genDate}</div>
+        </div>
+      </div>
+      <div class="pp-columns">
+        <div class="pp-col">${buildColumn(leftDays)}</div>
+        <div class="pp-col">${buildColumn(rightDays)}</div>
+      </div>
+      <div class="pp-legend">
+        <span class="pp-legend-item"><span class="pp-dot" style="background:#f39c12;"></span>Matin</span>
+        <span class="pp-legend-item"><span class="pp-dot" style="background:#16a085;"></span>Tranche</span>
+        <span class="pp-legend-item"><span class="pp-dot" style="background:#34495e;"></span>Soir</span>
+        <span class="pp-legend-item pp-legend-muted">— Non assigné</span>
+        ${cd.directorName?`<span class="pp-legend-item pp-legend-muted">Directeur : ${cd.directorName}</span>`:''}
+      </div>
+    </div>`;
+
+    const styleHtml=`<style>
+      .pp-page{width:1123px;background:#fff;font-family:'DM Sans',Arial,Helvetica,sans-serif;color:#1a1f2e;padding:20px 26px 18px;}
+      .pp-header{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0a1628,#0d3060);color:#fff;border-radius:10px;padding:16px 22px;margin-bottom:16px;}
+      .pp-header-left{display:flex;align-items:center;gap:14px;}
+      .pp-logo{height:46px;border-radius:6px;background:#fff;padding:3px;}
+      .pp-logo-fallback{font-size:30px;}
+      .pp-company{font-size:15px;font-weight:900;letter-spacing:.2px;}
+      .pp-title{font-size:12px;opacity:.85;margin-top:2px;font-weight:700;}
+      .pp-header-right{text-align:right;}
+      .pp-month{font-size:20px;font-weight:900;text-transform:capitalize;}
+      .pp-generated{font-size:9.5px;opacity:.65;margin-top:2px;}
+      .pp-columns{display:flex;gap:16px;}
+      .pp-col{flex:1;min-width:0;}
+      .pp-table{width:100%;border-collapse:separate;border-spacing:0 6px;}
+      .pp-th-day{width:64px;}
+      .pp-th{font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;}
+      .pp-th-day{font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;text-align:left;padding:0 6px 4px;color:#8892a4;}
+      .pp-row{background:#f8f9fb;}
+      .pp-row td{padding:5px 6px;vertical-align:middle;border-top:1px solid #eef0f5;border-bottom:1px solid #eef0f5;}
+      .pp-row td:first-child{border-left:1px solid #eef0f5;border-radius:8px 0 0 8px;}
+      .pp-row td:last-child{border-right:1px solid #eef0f5;border-radius:0 8px 8px 0;}
+      .pp-weekend{background:#fff6ea;}
+      .pp-today{background:#fff3cd !important;}
+      .pp-today td{border-top:1.5px solid #f39c12 !important;border-bottom:1.5px solid #f39c12 !important;}
+      .pp-day-cell{width:64px;}
+      .pp-day-num{font-size:15px;font-weight:900;line-height:1.1;}
+      .pp-day-name{font-size:9px;color:#8892a4;font-weight:700;text-transform:uppercase;}
+      .pp-today-badge{display:inline-block;background:#f39c12;color:#fff;font-size:7.5px;font-weight:800;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:middle;}
+      .pp-slot{background:#fff;border-radius:6px;padding:4px 8px;min-height:30px;display:flex;flex-direction:column;justify-content:center;}
+      .pp-slot-name{font-size:11px;font-weight:800;color:#1a1f2e;line-height:1.25;}
+      .pp-slot-time{font-size:9px;color:#8892a4;font-weight:600;margin-top:1px;}
+      .pp-slot-empty{background:transparent;color:#c3c9d4;font-size:12px;font-weight:700;text-align:center;padding:4px 8px;min-height:30px;display:flex;align-items:center;justify-content:center;}
+      .pp-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid #eef0f5;}
+      .pp-legend-item{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:#4a5568;}
+      .pp-legend-muted{color:#8892a4;font-weight:600;}
+      .pp-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+      *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+    </style>`;
+
+    const container=document.createElement('div');
+    container.style.cssText='position:fixed;left:-9999px;top:0;background:#fff;z-index:-1;';
+    container.innerHTML=styleHtml+pageHtml;
+    document.body.appendChild(container);
+
+    await new Promise(res=>setTimeout(res,300)); // laisser le DOM se peindre (images, polices)
+
+    const target=container.querySelector('.pp-page');
+    const canvas=await html2canvas(target,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false});
+    document.body.removeChild(container);
+
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
+    const PAGE_W=297,PAGE_H=210,MARGIN=6;
+    const maxW=PAGE_W-MARGIN*2,maxH=PAGE_H-MARGIN*2;
+    const pxPerMM=canvas.width/ (target.offsetWidth/96*25.4); // px canvas par mm réel
+    const contentWmm=canvas.width/pxPerMM, contentHmm=canvas.height/pxPerMM;
+
+    if(contentHmm<=maxH){
+      // Tout tient sur une seule page → on centre l'image
+      const scale=Math.min(maxW/contentWmm,1);
+      const imgW=contentWmm*scale, imgH=contentHmm*scale;
+      const x=(PAGE_W-imgW)/2, y=MARGIN;
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',x,y,imgW,imgH,'p0','FAST');
+    } else {
+      // Sécurité : contenu trop grand → découpage en plusieurs pages
+      const pageHeightPx=Math.floor(maxH*pxPerMM);
+      const totalPages=Math.max(1,Math.ceil(canvas.height/pageHeightPx));
+      for(let p=0;p<totalPages;p++){
+        if(p>0)pdf.addPage('a4','landscape');
+        const srcY=p*pageHeightPx, srcH=Math.min(pageHeightPx,canvas.height-srcY);
+        const pageCanvas=document.createElement('canvas');
+        pageCanvas.width=canvas.width; pageCanvas.height=pageHeightPx;
+        const ctx=pageCanvas.getContext('2d');
+        ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
+        ctx.drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
+        const imgW=maxW, imgH=(pageHeightPx/pxPerMM);
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg',0.95),'JPEG',MARGIN,MARGIN,imgW,imgH,'p'+p,'FAST');
+      }
+    }
+
+    const safe=(companyData.nom||'Hypermarche').replace(/[^a-z0-9À-ɏ]/gi,'_');
+    pdf.save(`Planning_Permanence_${MOIS_NOMS[month]}_${year}_${safe}.pdf`);
+    showToast('✅ PDF du planning téléchargé','#27ae60');
+  }catch(e){
+    console.error(e);
+    showToast('❌ Erreur lors de la génération du PDF','#e74c3c');
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.textContent='📄 Exporter en PDF';}
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // GESTION DES DÉPARTEMENTS PERSONNALISÉS
 // ══════════════════════════════════════════════════════════════
