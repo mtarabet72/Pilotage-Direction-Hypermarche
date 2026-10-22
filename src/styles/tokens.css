@@ -1,0 +1,64 @@
+:root {
+  --color-bg: #f4f7fb;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-surface-muted: #eef3f8;
+  --color-border: #e2e8f0;
+  --color-text: #111827;
+  --color-text-soft: #475569;
+  --color-muted: #64748b;
+  --color-primary: #e63950;
+  --color-primary-strong: #c81d3d;
+  --color-secondary: #102244;
+  --color-secondary-soft: #0d3060;
+  --color-success: #27ae60;
+  --color-warning: #f39c12;
+  --color-info: #2980b9;
+  --color-danger: #e74c3c;
+  --color-shadow: rgba(15, 23, 42, 0.08);
+  --color-shadow-strong: rgba(15, 23, 42, 0.14);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --shadow-soft: 0 8px 22px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 18px 40px rgba(15, 23, 42, 0.12);
+
+  --font-sans: "DM Sans", "Segoe UI", sans-serif;
+  --font-mono: "DM Mono", "SFMono-Regular", monospace;
+
+  --max-shell: 1320px;
+}
+
+html {
+  --app-shell-bg: var(--color-bg);
+  --app-panel-bg: var(--color-surface);
+  --app-panel-border: var(--color-border);
+  --app-text: var(--color-text);
+  --app-text-soft: var(--color-text-soft);
+}
+
+html[data-theme="dark"] {
+  --color-bg: #0b1220;
+  --color-surface: #121d2d;
+  --color-surface-alt: #172435;
+  --color-surface-muted: #101b2b;
+  --color-border: #243247;
+  --color-text: #edf2ff;
+  --color-text-soft: #c7d2ea;
+  --color-muted: #94a3b8;
+  --color-shadow: rgba(2, 6, 23, 0.45);
+  --color-shadow-strong: rgba(2, 6, 23, 0.6);
+}

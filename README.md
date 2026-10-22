@@ -1,57 +1,80 @@
 # Pilotage Direction Hypermarché
 
-## Objectif
-Ce dépôt contient un outil de pilotage opérationnel pour la direction d'un hypermarché. Il est actuellement structuré comme une application web monopage (SPA) et a été préparé pour être modernisé avec une architecture plus professionnelle.
+## Vue d'ensemble
+Ce dépôt contient une application web de pilotage opérationnel pour la direction d'un hypermarché. Il permet de gérer les tâches, les indicateurs de performance, les résultats et les exports PDF.
 
-## Architecture proposée
+## Objectif de la refonte professionnelle
+Le projet a une forte logique fonctionnelle, mais il manque aujourd'hui une architecture plus saine et plus durable. La refonte vise à :
+- séparer les contenus, les styles et les scripts ;
+- reprendre le système visuel avec un design plus premium ;
+- organiser les vues par responsabilité ;
+- réutiliser les composants UI ;
+- faciliter la maintenance sur le long terme.
+
+## Structure de projet cible
 
 ```text
 .
-├── index.html                  # page d'entrée de l'application
-├── manifest.json               # configuration PWA
-├── service-worker.js           # service worker
-├── README.md                  # documentation principale
+├── index.html
+├── manifest.json
+├── service-worker.js
+├── README.md
 ├── src/
-│   ├── pages/
-│   │   └── README.md          # documentation des pages / vues
+│   ├── app/
+│   │   ├── components/
+│   │   ├── config/
+│   │   ├── core/
+│   │   ├── data/
+│   │   ├── features/
+│   │   ├── services/
+│   │   └── utils/
 │   ├── scripts/
-│   │   └── app.js             # bootstrap applicatif et logique de design system
+│   │   └── app.js
 │   └── styles/
-│       ├── design-system.css  # tokens, palette, grille, composants
-│       └── app.css            # styles spécifiques de l'application
-├── assets/
-│   └── icons/                 # futurs visuels partagés
-└── public/
-    └── docs/                  # documents, rapports et exports
+│       ├── tokens.css
+│       ├── base.css
+│       ├── components.css
+│       └── app.css
+├── public/
+│   └── assets/
+│       ├── icons/
+│       └── logos/
+└── docs/
+    └── architecture.md
 ```
 
-## Évolution recommandée
-- Séparer les feuilles de style dans `src/styles/`
-- Séparer les scripts dans `src/scripts/`
-- Séparer les vues / pages dans `src/pages/`
-- Centraliser les tokens de design dans un système cohérent (`design-system.css`)
-- Utiliser des composants réutilisables : cartes, boutons, filtres, badges, modales
-- Introduire une naming convention claire et une architecture par responsabilités
+## Règles d'architecture
+- Les styles doivent être séparés des pages HTML.
+- Les scripts applicatifs doivent vivre dans `src/scripts/` ou `src/app/`.
+- Les composants visuels doivent être réutilisables.
+- Les tokens de design doivent être centralisés dans un seul fichier.
+- L’interface doit être construite avec des classes cohérentes et des composants standardisés.
+- Les fichiers doivent être organisés par responsabilité, pas par hasard.
 
-## Modernisation UX/UI
-Le projet a déjà une base visuelle solide, mais une refonte professionnelle doit inclure :
-- palette claire et hiérarchie visuelle forte
-- composants standardisés
-- spacing cohérent et design tokens
-- états visuels (hover, focus, active, disabled)
-- responsive design plus strict sur mobile/tablette
-- navigation plus lisible et plus premium
+## Design system recommandé
+- palette claire et premium ;
+- typographie lisible et hiérarchisée ;
+- grille cohérente ;
+- composants de base standardisés ;
+- états visuels réglés (hover, focus, active, disabled) ;
+- navigation plus lisible sur mobile et desktop ;
+- cartes de KPI plus élégantes et plus homogènes.
 
-## Bonnes pratiques
-- Garder `index.html` comme point d'entrée technique
-- Migrer progressivement CSS/JS vers `src/styles` et `src/scripts`
-- Ajouter des composants partagés pour éviter la duplication
-- Gérer les thèmes avec variables CSS
-- Préparer les exports PDF / rapports avec un style standardisé
+## Étapes de migration
+1. Séparer les styles du HTML en fichiers `src/styles`.
+2. Migrer la logique JS dans `src/scripts/` et `src/app/`.
+3. Créer des composants réutilisables (Header, Sidebar, Cards, Buttons, Modal, Toast).
+4. Structurer les vues Dashboard, Tasks, Results, Export, Settings.
+5. Mettre en place un design system et un système de tokens.
+6. Tester la compatibilité responsive et la stabilité de l’application.
 
-## Prochaines étapes
-1. Migrer le CSS inline vers `src/styles/`
-2. Migrer le JS inline vers `src/scripts/`
-3. Créer une vraie structure multi-vues dans `src/pages/`
-4. Refondre le dashboard et les cartes KPI selon un système design moderne
-5. Tester la compatibilité mobile et PWA
+## Standards de qualité
+- code lisible,
+- variables CSS centralisées,
+- classes explicites,
+- séparation claire entre UI et logique,
+- sans code inline dispersé,
+- composants modulaires et maintenables.
+
+## État du dépôt
+Le dépôt est actuellement fonctionnel et riche en logique métier, mais il est encore trop monolithique. La refonte en cours vise à garder la valeur métier tout en améliorant la qualité de structure et l’expérience utilisateur.
