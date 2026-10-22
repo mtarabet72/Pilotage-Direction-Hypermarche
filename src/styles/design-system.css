@@ -1,0 +1,224 @@
+:root {
+  --bg: #f3f6fb;
+  --surface: #ffffff;
+  --surface-alt: #f8fafc;
+  --surface-muted: #edf2f7;
+  --border: #e2e8f0;
+  --text: #111827;
+  --text-soft: #475569;
+  --muted: #64748b;
+  --primary: #e63950;
+  --primary-strong: #c81d3d;
+  --secondary: #102244;
+  --secondary-soft: #0d3060;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --info: #2980b9;
+  --danger: #e74c3c;
+  --shadow-soft: 0 10px 28px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --font-sans: "DM Sans", "Segoe UI", sans-serif;
+  --font-mono: "DM Mono", "SFMono-Regular", monospace;
+}
+
+html[data-theme="dark"] {
+  --bg: #0b1220;
+  --surface: #121d2d;
+  --surface-alt: #172435;
+  --surface-muted: #101b2b;
+  --border: #243247;
+  --text: #edf2ff;
+  --text-soft: #dfe7f7;
+  --muted: #94a3b8;
+  --shadow-soft: 0 12px 32px rgba(2, 6, 23, 0.45);
+  --shadow-card: 0 18px 44px rgba(2, 6, 23, 0.6);
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(41, 128, 185, 0.22);
+  outline-offset: 2px;
+}
+
+.app-shell-ready {
+  min-height: 100vh;
+}
+
+.surface-card,
+.panel-shell,
+.kpi-card,
+.task-item,
+.res-card,
+.settings-card,
+.export-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.kpi-grid,
+.summary-row,
+.res-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.kpi-card {
+  padding: 18px 20px;
+}
+
+.kpi-card__value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: clamp(1.8rem, 2vw, 2.5rem);
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.kpi-card__label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kpi-card__delta {
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.kpi-card__delta--up { color: var(--success); }
+.kpi-card__delta--down { color: var(--danger); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.badge--primary {
+  background: rgba(230, 57, 80, 0.1);
+  color: var(--primary-strong);
+}
+
+.badge--success {
+  background: rgba(39, 174, 96, 0.12);
+  color: var(--success);
+}
+
+.badge--info {
+  background: rgba(41, 128, 185, 0.1);
+  color: var(--info);
+}
+
+.badge--warning {
+  background: rgba(243, 156, 18, 0.12);
+  color: var(--warning);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover { transform: translateY(-1px); }
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: #fff;
+  box-shadow: 0 12px 22px rgba(230, 57, 80, 0.18);
+}
+
+.btn--secondary {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-soft);
+}
+
+.section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.grid-2, .grid-3, .grid-4 {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 900px) {
+  .grid-3, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
