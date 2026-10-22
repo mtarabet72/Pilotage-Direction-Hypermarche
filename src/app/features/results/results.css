@@ -1,0 +1,6 @@
+@import "../../styles/design-system.css";
+
+.results-grid {
+  display: grid;
+  gap: 16px;
+}

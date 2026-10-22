@@ -1,0 +1,12 @@
+@import "../../styles/design-system.css";
+
+.dashboard-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.dash-period-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

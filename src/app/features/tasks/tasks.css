@@ -1,0 +1,24 @@
+@import "../../styles/design-system.css";
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.task-item__label {
+  font-weight: 700;
+}
+
+.task-item__meta {
+  color: var(--muted);
+  font-size: 11px;
+}
