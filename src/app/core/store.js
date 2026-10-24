@@ -13,6 +13,7 @@ export const store = {
   permanencePlanning: {},
   taskNotes: {},
   rayons: {},
+  permanenceNotes: {},
   completions: {},
   events: {},
   companyData: {}
@@ -110,13 +111,38 @@ export async function loadNotes() {
   localStorage.setItem(LOCAL_KEYS.taskNotes, JSON.stringify(merged));
 }
 
+// Notes de passation : une ligne Supabase par jour ET créneau (hm_perm_note_<date>_<slot>).
+const PERM_SLOTS = ['matin', 'tranche', 'soir'];
+export async function loadPermanenceNotes() {
+  const cached = readLocal('hm_perm_notes', {});
+  store.permanenceNotes = { ...cached, ...store.permanenceNotes };
+  if (!getClient()) return;
+  const dates = [todayKey(), dateKeyMinus(1)];
+  const keys = dates.flatMap((d) => PERM_SLOTS.map((s) => `${d}_${s}`));
+  const vals = await Promise.all(keys.map((k) => kvGet('hm_perm_note_' + k).catch(() => null)));
+  keys.forEach((k, i) => { if (typeof vals[i] === 'string') store.permanenceNotes[k] = vals[i]; else if (vals[i] === '') delete store.permanenceNotes[k]; });
+  localStorage.setItem('hm_perm_notes', JSON.stringify(store.permanenceNotes));
+}
+
+// Note laissée par le créneau précédent (nouveau format, sinon ancien planning.notes de la v3).
+const legacyNote = (date, slot) => ((store.permanencePlanning[date] || {}).notes || {})[slot] || '';
+const noteOf = (date, slot) => store.permanenceNotes[`${date}_${slot}`] ?? legacyNote(date, slot);
+export function getPermanenceIncomingNote(rid) {
+  const today = todayKey();
+  if (rid === 'perm_matin') return noteOf(dateKeyMinus(1), 'soir');
+  if (rid === 'perm_tranche') return noteOf(today, 'matin');
+  if (rid === 'perm_soir') return (store.permanencePlanning[today] || {}).tranche?.userId ? noteOf(today, 'tranche') : noteOf(today, 'matin');
+  return '';
+}
+export const getPermanenceOutgoingNote = (rid) => (PERM_SLOT_OF_ROLE[rid] ? noteOf(todayKey(), PERM_SLOT_OF_ROLE[rid]) : '');
+
 export async function loadAll() {
   loadLocal();
-  if (!getClient()) return;
+  if (!getClient()) { await loadPermanenceNotes(); return; }
   const keys = Object.keys(REMOTE_KEYS);
   const values = await Promise.all(keys.map((k) => kvGet(k).catch(() => null)));
   keys.forEach((k, i) => applyRemote(k, values[i]));
-  await Promise.all([refreshCompletions().catch(() => {}), refreshEvents().catch(() => {}), loadNotes().catch(() => {})]);
+  await Promise.all([refreshCompletions().catch(() => {}), refreshEvents().catch(() => {}), loadNotes().catch(() => {}), loadPermanenceNotes().catch(() => {})]);
   if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('pilotage:loaded'));
 }
 
@@ -127,6 +153,7 @@ export async function applyRealtime({ table, key, fresh }) {
     if (isDirector()) await refreshCompletions().catch(() => {});
     return true;
   }
+  if (key && key.startsWith('hm_perm_note_')) { await loadPermanenceNotes().catch(() => {}); return true; }
   if (key && key.startsWith('hm_task_notes_')) { await loadNotes().catch(() => {}); return true; }
   return key ? applyRemote(key, fresh) : false;
 }
@@ -136,7 +163,7 @@ export const getAllRoles = () => [...ROLES, ...(store.customRoles || [])];
 export const getRole = (id) => getAllRoles().find((r) => r.id === id);
 
 export const PERM_ROLE_IDS = ['perm_matin', 'perm_soir', 'perm_tranche'];
-const PERM_SLOT_OF_ROLE = { perm_matin: 'matin', perm_soir: 'soir', perm_tranche: 'tranche' };
+export const PERM_SLOT_OF_ROLE = { perm_matin: 'matin', perm_soir: 'soir', perm_tranche: 'tranche' };
 export const isPermanenceRole = (rid) => PERM_ROLE_IDS.includes(rid);
 
 const permMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };

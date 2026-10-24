@@ -1,14 +1,15 @@
 import { getCurrentUser, isDirector } from '../../services/auth.js';
 import {
   store, getAccessibleRoles, getRole, getAllTasks, getRoleStats, isTaskDone, canEditRole, isOwnRole,
-  isPermanenceRole, getPermanenceAssignedName, getPermanenceHoraireLabel, getCompletionTime, ck
+  isPermanenceRole, getPermanenceAssignedName, getPermanenceHoraireLabel, getCompletionTime, ck,
+  getPermanenceIncomingNote, getPermanenceOutgoingNote, PERM_SLOT_OF_ROLE
 } from '../../core/store.js';
 import { setTaskDone } from '../../core/completions.js';
-import { saveCustomTasks, purgeTaskData } from '../../core/persist.js';
+import { saveCustomTasks, purgeTaskData, savePermanenceNote } from '../../core/persist.js';
 import { openTaskForm } from './taskForm.js';
 import { openNoteForm } from './noteForm.js';
 import { renderRayon, populateRayonSelect, setActiveRayon, toggleRayonTask } from './RayonView.js';
-import { FREQ_LABELS, FREQ_COLORS, deadlinePeriodInfo } from '../../core/periods.js';
+import { FREQ_LABELS, FREQ_COLORS, deadlinePeriodInfo, todayKey } from '../../core/periods.js';
 
 const SECTEURS_ORDER = ['Commercial', 'Services', 'Permanence'];
 const secteurIcon = (s) => (s === 'Commercial' ? '🛍️' : s === 'Permanence' ? '🕐' : '⚙️');
@@ -92,10 +93,15 @@ function permanenceLine(r) {
   const el = $('permanence-banner');
   if (!el) return;
   if (!isPermanenceRole(r.id)) { el.style.display = 'none'; return; }
+  if (document.activeElement?.id === 'perm-note-out') return;          // ne pas effacer une note en cours de saisie
   const name = getPermanenceAssignedName(r.id), hor = getPermanenceHoraireLabel(r.id);
+  const incoming = getPermanenceIncomingNote(r.id), outgoing = getPermanenceOutgoingNote(r.id);
   el.style.display = 'block';
   el.innerHTML = `<div style="background:#fff;border-radius:10px;box-shadow:var(--shadow);padding:10px 14px;margin-bottom:12px;border-left:4px solid ${r.color};font-size:12px;">
-    <strong>${r.icon} ${esc(r.label)}</strong> — ${name ? esc(name) : '<span style="color:#e74c3c">Non planifié</span>'}${hor ? ` · ${esc(hor)}` : ''}</div>`;
+    <strong>${r.icon} ${esc(r.label)}</strong> — ${name ? esc(name) : '<span style="color:#e74c3c">Non planifié</span>'}${hor ? ` · ${esc(hor)}` : ''}
+    ${incoming ? `<div style="margin-top:8px;padding:7px 10px;background:#eaf4fb;border-radius:8px;color:#1a5276;">📥 <strong>Note reçue :</strong> ${esc(incoming)}</div>` : ''}
+    ${canEditRole(r.id) ? `<div style="margin-top:8px;"><textarea id="perm-note-out" rows="2" maxlength="500" placeholder="Note de passation pour le créneau suivant…" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font:inherit;font-size:12px;">${esc(outgoing)}</textarea>
+      <button type="button" data-action="perm-note-save" style="margin-top:4px;padding:6px 12px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;font-size:11px;cursor:pointer;">📝 Enregistrer la note</button></div>` : ''}</div>`;
 }
 
 const safeData = (u) => (typeof u === 'string' && /^data:(image|application)\//.test(u) ? u : '');
@@ -260,6 +266,13 @@ export function initTasks() {
     if (action === 'edit') return openTaskForm(ui.roleId, item.dataset.task, refresh);
     if (action === 'delete') return deleteTask(item.dataset.task);
     toggleTask(item.dataset.task, item.dataset.freq);
+  });
+  $('permanence-banner')?.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-action="perm-note-save"]') || !ui.roleId) return;
+    const slot = PERM_SLOT_OF_ROLE[ui.roleId];
+    if (!slot || !canEditRole(ui.roleId)) return;
+    const res = await savePermanenceNote(todayKey(), slot, $('perm-note-out').value.trim());
+    toast(res.synced ? '📝 Note de passation enregistrée' : '⚠️ Note enregistrée sur cet appareil — synchronisation en attente', res.synced ? '#27ae60' : '#e67e22');
   });
   document.addEventListener('pilotage:login', renderTaskView);
   document.addEventListener('pilotage:data', () => setTimeout(renderTaskView, 150));

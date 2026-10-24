@@ -61,3 +61,11 @@ export async function saveShared(prop) {
   if (!isDirector()) return { synced: false, error: 'Réservé au Directeur' };
   return result(() => kvSet(def.remote, store[prop]));
 }
+
+// Note de passation : une ligne par jour+créneau, donc aucun risque d'écraser le travail d'un autre.
+export async function savePermanenceNote(date, slot, text) {
+  const k = `${date}_${slot}`;
+  if (text) store.permanenceNotes[k] = text; else delete store.permanenceNotes[k];
+  localStorage.setItem('hm_perm_notes', JSON.stringify(store.permanenceNotes));
+  return result(() => kvSet('hm_perm_note_' + k, text || ''));
+}
