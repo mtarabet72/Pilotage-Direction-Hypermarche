@@ -1,6 +1,42 @@
-@import "../../styles/design-system.css";
-
-.settings-grid {
-  display: grid;
-  gap: 16px;
-}
+/* Paramètres — styles extraits de la v3. */
+.settings-card{background:var(--white);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow);margin-bottom:16px;}
+.settings-card h3{font-size:14px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:600px){.settings-grid{grid-template-columns:1fr;}}
+.sf-group{display:flex;flex-direction:column;gap:5px;}
+.sf-group.full-width{grid-column:1/-1;}
+.sf-label{font-size:11px;font-weight:700;color:var(--muted);}
+.sf-input{padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;outline:none;width:100%;transition:border-color .15s;}
+.sf-input:focus{border-color:var(--accent);}
+.btn-primary{padding:10px 22px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:800;color:#fff;background:linear-gradient(135deg,#27ae60,#1a7a40);display:inline-flex;align-items:center;gap:8px;transition:opacity .15s;touch-action:manipulation;}
+.btn-primary:hover{opacity:.88;}
+.btn-danger{padding:10px 22px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;color:#fff;background:#e74c3c;display:inline-flex;align-items:center;gap:8px;touch-action:manipulation;}
+#logo-file{display:none;}
+.logo-upload-btn{padding:8px 14px;border-radius:8px;border:1.5px dashed var(--border);background:#f8f9fb;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);transition:all .15s;touch-action:manipulation;}
+.logo-upload-btn:hover{border-color:var(--accent);color:var(--accent);}
+.logo-preview{width:60px;height:60px;border-radius:8px;object-fit:cover;border:2px solid var(--border);display:none;}
+.logo-preview.visible{display:block;}
+.user-card{background:#f8f9fb;border-radius:10px;border:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.user-card.inactive{opacity:.5;}
+.user-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:#fff;flex-shrink:0;}
+.user-info{flex:1;}
+.user-name{font-size:13px;font-weight:800;}
+.user-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.user-role-badge{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:700;}
+.user-actions{display:flex;gap:6px;}
+.user-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:12px;transition:all .15s;touch-action:manipulation;}
+.user-btn:hover{background:#f0f2f5;}
+.user-btn.danger:hover{background:#fdecea;border-color:#e74c3c;color:#e74c3c;}
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;margin-top:10px;}
+.perm-item{display:flex;align-items:center;gap:7px;font-size:12px;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:#fff;cursor:pointer;}
+.perm-item input[type=checkbox]{width:14px;height:14px;cursor:pointer;flex-shrink:0;}
+.perm-item label{cursor:pointer;font-weight:600;flex:1;}
+.perm-section-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin:10px 0 6px;grid-column:1/-1;}
+.modal-field{margin-bottom:12px;}
+.modal-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;}
+.modal-field input,.modal-field select{width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;outline:none;}
+.modal-field input:focus,.modal-field select:focus{border-color:var(--accent);}
+.modal-section{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-top:10px;border-top:1px solid var(--border);}
+.pw-toggle{position:relative;}
+.pw-toggle input{padding-right:40px;}
+.pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);}
