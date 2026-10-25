@@ -1,0 +1,9 @@
+/* Mise en page des vues, toasts et styles manquants — repris de la v3. */
+#add-btn{background:var(--accent);margin-left:auto;padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;touch-action:manipulation;}
+#rayon-selector{display:none;margin-bottom:12px;padding:0 2px;}
+#rayon-selector select{padding:8px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;min-width:220px;background:#fff;cursor:pointer;outline:none;}
+#view-results{padding:20px 22px;max-width:900px;margin:0 auto;}
+#view-export{padding:20px 22px;max-width:900px;margin:0 auto;}
+#view-settings{padding:20px 22px;max-width:900px;margin:0 auto;}
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1f2e;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;z-index:600;white-space:nowrap;pointer-events:none;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}

@@ -165,6 +165,14 @@ document.addEventListener('DOMContentLoaded', () => {
     $(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); })
   );
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});   // PWA hors ligne + notifications Android
+  const syncHeaderHeight = () => {
+    const h = document.getElementById('app-header');
+    if (h) document.documentElement.style.setProperty('--hdr-h', h.offsetHeight + 'px');
+  };
+  syncHeaderHeight();
+  window.addEventListener('resize', syncHeaderHeight);
+  window.addEventListener('load', syncHeaderHeight);
+  document.fonts?.ready?.then(syncHeaderHeight);
   initDashboard();
   initTasks();
   initResults();

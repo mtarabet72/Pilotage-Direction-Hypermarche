@@ -59,6 +59,7 @@ function connectionHtml() {
   const cfg = loadConfig(), ok = sbStatus.connected;
   return `<div class="settings-card" style="border-left:4px solid #3ecf8e;"><h3>⚡ Connexion Supabase</h3>
     <div style="padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:12px;background:${ok ? '#3ecf8e22' : '#e74c3c22'};color:${ok ? '#1a7a50' : '#c0392b'}">${ok ? '✅ Connecté' : '⚠️ Non connecté — mode local' + (sbStatus.error ? ' (' + esc(sbStatus.error) + ')' : '')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">Diagnostic : SDK ${window.supabase ? '✅ chargé' : '❌ non chargé (bloqué ?)'} · Projet ${esc((cfg.projectUrl || '').replace(/^https?:\/\//, '').slice(0, 40))} · Clé ${cfg.anonKey ? '✅ ' + esc(cfg.anonKey.slice(0, 10)) + '…' : '❌ absente'} · Code d'accès ${cfg.appSecret ? '✅ défini' : '❌ non défini'}</div>
     <div class="settings-grid">
       <div class="sf-group full-width"><label class="sf-label">Project URL</label><input type="text" class="sf-input" id="cfg-url" value="${esc(cfg.projectUrl)}" placeholder="https://xxxx.supabase.co"></div>
       <div class="sf-group full-width"><label class="sf-label">Clé publique (anon / publishable)</label><input type="text" class="sf-input" id="cfg-key" value="${esc(cfg.anonKey)}"></div>

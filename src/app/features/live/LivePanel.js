@@ -1,9 +1,9 @@
 import { getCurrentUser, isDirector } from '../../services/auth.js';
 import {
-  store, getAllRoles, getAllTasks, isTaskDone, getCompletionTime, isPermanenceRole,
+  store, loadAll, getAllRoles, getAllTasks, isTaskDone, getCompletionTime, isPermanenceRole,
   getPermanenceAssignedName, refreshCompletions, refreshEvents
 } from '../../core/store.js';
-import { sbStatus } from '../../services/supabase.js';
+import { sbStatus, connect } from '../../services/supabase.js';
 import { localDateStr, deadlineSortMinutes } from '../../core/periods.js';
 import { toast, esc } from '../../core/dom.js';
 
@@ -45,7 +45,7 @@ export function renderLive() {
   if (!panel) return;
   const body = panel.querySelector('#lp-body'), last = panel.querySelector('#lp-last');
   const now = new Date(), events = recentEvents();
-  if (last) last.innerHTML = `${events[0] ? `Màj ${esc(events[0].heure)} — ${esc(events[0].userName)} · ` : ''}${sbStatus.connected ? '<span style="color:#27ae60">⚡ Supabase actif</span>' : '<span style="color:#f39c12">⚠️ Local uniquement</span>'}`;
+  if (last) last.innerHTML = `${events[0] ? `Màj ${esc(events[0].heure)} — ${esc(events[0].userName)} · ` : ''}${sbStatus.connected ? '<span style="color:#27ae60">⚡ Supabase actif</span>' : `<span style="color:#f39c12">⚠️ Local uniquement${sbStatus.error ? ' — ' + esc(String(sbStatus.error).slice(0, 80)) : ''}</span>`}`;
 
   const rows = getAllRoles()
     .filter((r) => !(isPermanenceRole(r.id) && !getPermanenceAssignedName(r.id)))      // créneau non planifié aujourd'hui
@@ -96,9 +96,16 @@ export function openLivePanel() {
   panel.innerHTML = `<div id="lp-header"><div><div style="font-size:13px;font-weight:900;">📡 Suivi Live — Admin</div><div id="lp-last" style="font-size:10px;opacity:.7;">Chargement…</div></div>
     <div style="display:flex;gap:6px;align-items:center;"><div style="font-size:10px;color:rgba(255,255,255,.5);">🟢 dans les temps &nbsp;🔴 en retard</div>
     <div style="width:10px;height:10px;border-radius:50%;background:${sbStatus.connected ? '#27ae60' : '#f39c12'};animation:lpPulse 1.5s infinite;"></div>
+    ${sbStatus.connected ? '' : '<button type="button" data-live-retry style="background:#f39c12;border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">🔄 Reconnecter</button>'}
     <button type="button" data-live-close style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">✕ Fermer</button></div></div>
     <div id="lp-body" style="overflow-y:auto;max-height:calc(80vh - 60px);padding:10px 12px;"></div>`;
-  panel.addEventListener('click', (e) => { if (e.target.closest('[data-live-close]')) closeLive(); });
+  panel.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-live-close]')) return closeLive();
+    if (e.target.closest('[data-live-retry]')) {
+      try { await connect(); await loadAll(); toast('⚡ Supabase connecté', '#3ecf8e'); closeLive(); openLivePanel(); }
+      catch (err) { toast('❌ ' + (err.message || err), '#e74c3c'); renderLive(); }
+    }
+  });
   document.body.appendChild(panel);
   renderLive();
   reload();
