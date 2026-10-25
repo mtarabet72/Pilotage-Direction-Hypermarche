@@ -12,6 +12,16 @@ const withTimeout = (promise, ms, label) =>
     new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' : délai dépassé')), ms))
   ]);
 
+// Une écriture refusée par la RLS (code 42501) = code d'accès absent ou incorrect.
+function denied(error) {
+  if (error && (error.code === '42501' || /row-level security/i.test(error.message || ''))) {
+    sbStatus.denied = true;
+    if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('pilotage:denied'));
+    return new Error('Code d\'accès Supabase refusé (code absent ou incorrect)');
+  }
+  return error;
+}
+
 export function getClient() {
   return client;
 }
@@ -58,15 +68,15 @@ export async function kvSet(key, value, table = 'hm_app_data') {
   if (!client) return false;
   const { error } = await client
     .from(table)
-    .upsert({ [keyColumn(table)]: key, data: value, updated_at: new Date().toISOString() });
-  if (error) throw error;
+    .upsert({ [keyColumn(table)]: key, data: value });
+  if (error) throw denied(error);
   return true;
 }
 
 export async function kvDelete(key, table = 'hm_app_data') {
   if (!client) return false;
   const { error } = await client.from(table).delete().eq(keyColumn(table), key);
-  if (error) throw error;
+  if (error) throw denied(error);
   return true;
 }
 

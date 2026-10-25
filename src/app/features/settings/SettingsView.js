@@ -62,7 +62,10 @@ function connectionHtml() {
     <div class="settings-grid">
       <div class="sf-group full-width"><label class="sf-label">Project URL</label><input type="text" class="sf-input" id="cfg-url" value="${esc(cfg.projectUrl)}" placeholder="https://xxxx.supabase.co"></div>
       <div class="sf-group full-width"><label class="sf-label">Clé publique (anon / publishable)</label><input type="text" class="sf-input" id="cfg-key" value="${esc(cfg.anonKey)}"></div>
-      <div class="sf-group full-width"><label class="sf-label">Secret applicatif (doit être identique à celui du script SQL)</label><input type="password" class="sf-input" id="cfg-secret" value="${esc(cfg.appSecret)}" autocomplete="off"></div></div>
+      <div class="sf-group full-width"><label class="sf-label">Secret applicatif (à recopier à l'identique dans supabase-setup.sql)</label>
+        <div style="display:flex;gap:6px;"><input type="text" class="sf-input" id="cfg-secret" value="${esc(cfg.appSecret)}" autocomplete="off" spellcheck="false" style="flex:1;font-family:monospace;">
+        <button type="button" class="btn-primary" data-action="cfg-secret-copy" style="background:#fff;color:#333;">📋 Copier</button>
+        <button type="button" class="btn-primary" data-action="cfg-secret-toggle" style="background:#fff;color:#333;" title="Masquer / afficher">👁️</button></div></div></div></div>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
       <button type="button" class="btn-primary" data-action="cfg-save" style="background:#3ecf8e;border-color:#3ecf8e;color:#fff;">⚡ Enregistrer et reconnecter</button>
       <button type="button" class="btn-primary" data-action="cfg-test" style="background:#fff;color:#333;">🧪 Tester l'écriture</button>
@@ -98,6 +101,7 @@ async function saveCompany() {
 async function saveConnection() {
   const cfg = { projectUrl: $('cfg-url').value.trim(), anonKey: $('cfg-key').value.trim(), appSecret: $('cfg-secret').value };
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(cfg.projectUrl) || !cfg.anonKey) return toast('⚠️ URL (https://xxxx.supabase.co) et clé requises', '#e74c3c');
+  if (!cfg.appSecret) return toast('⚠️ Saisissez le code d\'accès', '#e74c3c');
   const previous = loadConfig();
   try { await connect(cfg); }
   catch (e) { await connect(previous).catch(() => {}); return toast('❌ Connexion impossible : ' + e.message, '#e74c3c'); }
@@ -150,6 +154,12 @@ export function initSettings() {
     if (a === 'company-save') return saveCompany();
     if (a === 'logo-remove') { store.companyData.logo = null; const r = await saveShared('companyData'); applyCompanyBranding(); renderSettings(); return syncToast(r, 'Logo retiré', '⚠️ Retiré localement — synchronisation en attente'); }
     if (a === 'cfg-save') return saveConnection();
+    if (a === 'cfg-secret-toggle') { const i = $('cfg-secret'); i.type = i.type === 'text' ? 'password' : 'text'; return; }
+    if (a === 'cfg-secret-copy') {
+      try { await navigator.clipboard.writeText($('cfg-secret').value); toast('📋 Secret copié', '#27ae60'); }
+      catch (err) { $('cfg-secret').select(); toast('Sélectionné : faites Ctrl+C pour copier', '#f39c12'); }
+      return;
+    }
     if (a === 'cfg-test') return testWrite();
     if (a === 'cfg-reset') { clearConfig(); return renderSettings(); }
     if (a === 'backup-export') return exportBackup();

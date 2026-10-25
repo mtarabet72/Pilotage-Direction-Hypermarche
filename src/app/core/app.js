@@ -3,6 +3,9 @@ import { Router } from './router.js';
 import { connect, sbStatus, subscribe, kvGet } from '../services/supabase.js';
 import { initTasks } from '../features/tasks/TasksView.js';
 import { flushPending } from './completions.js';
+import { hasAccessCode, openAccessCodeModal, initAccessCode } from '../features/settings/accessCode.js';
+import { initLive } from '../features/live/LivePanel.js';
+import { initNotifications } from '../features/live/notifications.js';
 import { initSettings, applyCompanyBranding } from '../features/settings/SettingsView.js';
 import { openChangePassword } from '../features/settings/passwordModal.js';
 import { initExport } from '../features/export/ExportView.js';
@@ -57,6 +60,7 @@ async function doLogin() {
 
 function doLogout() {
   logout();
+  document.dispatchEvent(new CustomEvent('pilotage:logout'));
   $('login-overlay')?.classList.remove('hidden');
 }
 
@@ -69,6 +73,7 @@ function showUserMenu() {
 
 // Démarrage : connexion Supabase (timeout 8 s, repli local), utilisateurs, session, Realtime.
 async function bootstrapData() {
+  if (!hasAccessCode()) openAccessCodeModal({ reason: 'first' });
   setLoginBusy(true, 'Connexion Supabase…');
   try {
     await connect();
@@ -159,11 +164,15 @@ document.addEventListener('DOMContentLoaded', () => {
   ['login-username', 'login-password'].forEach((id) =>
     $(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); })
   );
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});   // PWA hors ligne + notifications Android
   initDashboard();
   initTasks();
   initResults();
   initExport();
   initSettings();
+  initLive();
+  initNotifications();
+  initAccessCode();
   window.addEventListener('online', () => flushPending());
   bootstrapData();
   window.appRouter = router;

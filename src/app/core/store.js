@@ -84,13 +84,20 @@ export async function refreshCompletions() {
   localStorage.setItem('hm_comp_' + u.id, JSON.stringify(merged));
 }
 
+let eventsReady = false;
 export async function refreshEvents() {
   if (!getClient()) return;
   const { data, error } = await getClient().from('hm_events').select('id,data');
   if (error) throw error;
   const evts = {};
   (data || []).forEach((r) => { if (r.data) evts[r.id] = r.data; });
+  const prev = store.events;
   store.events = evts;
+  if (eventsReady && typeof document !== 'undefined') {            // nouveaux événements « tâche faite » depuis le dernier relevé
+    const added = Object.entries(evts).filter(([id, e]) => e.isDone && (!prev[id] || prev[id].completedAt !== e.completedAt)).map(([, e]) => e);
+    if (added.length) document.dispatchEvent(new CustomEvent('pilotage:events', { detail: { added } }));
+  }
+  eventsReady = true;
 }
 
 // Notes : ancien objet partagé (v3) + une ligne par utilisateur hm_task_notes_<id> (null = note supprimée).

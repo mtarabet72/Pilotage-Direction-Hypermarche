@@ -3,7 +3,7 @@
 // Version : hm-supabase-v2
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'pilotage-hm-v2';
+const CACHE_NAME = 'pilotage-hm-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -29,8 +29,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Toujours réseau en priorité, cache en fallback
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const sameOrigin = new URL(req.url).origin === self.location.origin;
+  // Réseau d'abord ; on mémorise chaque ressource de l'application (index, modules JS/CSS)
+  // pour qu'elle s'ouvre aussi hors ligne. Les appels Supabase (autre origine) ne sont jamais mis en cache.
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(req).then(res => {
+      if (sameOrigin && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req))
   );
 });

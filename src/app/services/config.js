@@ -1,12 +1,13 @@
 // Configuration Supabase.
 // Priorité : localStorage (saisie dans Paramètres) > valeurs par défaut ci-dessous.
-// ⚠️ appSecret doit être identique à celui du script supabase-setup.sql.
+// appSecret = code d'accès, identique à celui du script supabase-setup.sql. Il n'est PAS dans le code source :
+// chaque appareil le saisit une fois (stocké en localStorage).
 const STORAGE_KEY = 'hm_sb_cfg';
 
 const DEFAULT_CONFIG = {
   projectUrl: 'https://kipfcdhraasuuksypfyu.supabase.co',
   anonKey: 'sb_publishable__tvkohWyHFGl8Yv9t3G9Uw_2cn-FXH4',
-  appSecret: 'Mjn_Tanger08_Med!na#2025'
+  appSecret: ''               // volontairement vide : le code d'accès est saisi sur chaque appareil (jamais dans le code)
 };
 
 export function loadConfig() {
