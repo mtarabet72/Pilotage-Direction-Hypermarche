@@ -48,6 +48,13 @@
   "common.close": "Fermer",
   "common.apply": "Appliquer",
   "common.cancel": "Annuler",
+  "common.ok": "OK",
   "i18n.lang.fr": "FR",
-  "i18n.lang.ar": "AR"
+  "i18n.lang.ar": "AR",
+  "toast.supabase.connected": "⚡ Supabase connecté",
+  "toast.offline": "Mode hors ligne (Supabase indisponible)",
+  "toast.pdf.generated": "✅ PDF généré",
+  "toast.popup.blocked": "Autorisez les fenêtres popup pour imprimer",
+  "toast.saved": "✅ Paramètres enregistrés",
+  "toast.sync.pending": "⚠️ Enregistré sur cet appareil — synchronisation en attente"
 }
