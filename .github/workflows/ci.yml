@@ -34,6 +34,15 @@ jobs:
             echo "::error::Ancien système de code d'accès détecté."; exit 1
           fi
 
+      - name: Bibliothèques hébergées inchangées (empreintes SHA-256)
+        run: cd vendor && sha256sum -c SHA256SUMS
+
+      - name: Aucune ressource externe dans la page
+        run: |
+          if grep -nE '<(script|link)[^>]+(src|href)="https?://' index.html; then
+            echo "::error::Ressource externe détectée dans index.html"; exit 1
+          fi
+
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
