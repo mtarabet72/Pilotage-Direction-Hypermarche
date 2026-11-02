@@ -1,0 +1,42 @@
+name: Contrôles
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  controles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntaxe JavaScript
+        run: |
+          set -e
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Aucun secret dans le code
+        run: |
+          set -e
+          if grep -rIEn "sb_secret_|service_role_key\s*[:=]\s*['\"]|eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}" --exclude-dir=.git --exclude-dir=.github .; then
+            echo "::error::Un secret semble présent dans le code (clé secrète ou jeton)."; exit 1
+          fi
+          echo "OK : aucun secret détecté"
+
+      - name: Aucune trace de l'ancien code d'accès partagé
+        run: |
+          set -e
+          if grep -rIn "x-app-secret\|appSecret" src index.html; then
+            echo "::error::Ancien système de code d'accès détecté."; exit 1
+          fi
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Tests de la fonction admin-users
+        run: deno test --no-check supabase/functions/admin-users/
