@@ -1,9 +1,10 @@
 import { appState, setTheme } from './state.js';
 import { Router } from './router.js';
 import { connect, sbStatus, subscribe, kvGet } from '../services/supabase.js';
+import { purgeLegacyStorage } from '../services/config.js';
 import { initTasks } from '../features/tasks/TasksView.js';
 import { flushPending } from './completions.js';
-import { hasAccessCode, openAccessCodeModal, initAccessCode } from '../features/settings/accessCode.js';
+import { initLoginConnection, refreshLoginStatus, loginErrorMessage } from '../features/settings/loginConnection.js';
 import { initLive } from '../features/live/LivePanel.js';
 import { initNotifications } from '../features/live/notifications.js';
 import { initSettings, applyCompanyBranding } from '../features/settings/SettingsView.js';
@@ -11,7 +12,7 @@ import { openChangePassword } from '../features/settings/passwordModal.js';
 import { initExport } from '../features/export/ExportView.js';
 import { initResults } from '../features/results/ResultsView.js';
 import { initDashboard } from '../features/dashboard/DashboardView.js';
-import { loadUsers, login, logout, restoreSession, getCurrentUser, isDirector, changePassword } from '../services/auth.js';
+import { login, logout, restoreSession, getCurrentUser, isDirector } from '../services/auth.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,12 +54,14 @@ async function doLogin() {
     const user = await login($('login-username').value, $('login-password').value);
     $('login-password').value = '';
     applyUser(user);
+    startRealtime();
   } catch (e) {
-    if (errEl) { errEl.textContent = e.message; errEl.classList.add('show'); }
+    if (errEl) { errEl.textContent = loginErrorMessage(e); errEl.classList.add('show'); }
   }
 }
 
 function doLogout() {
+  stopRealtime();
   logout();
   document.dispatchEvent(new CustomEvent('pilotage:logout'));
   $('login-overlay')?.classList.remove('hidden');
@@ -71,34 +74,46 @@ function showUserMenu() {
   else if (window.confirm('Se déconnecter ?')) doLogout();
 }
 
-// Démarrage : connexion Supabase (timeout 8 s, repli local), utilisateurs, session, Realtime.
-async function bootstrapData() {
-  if (!hasAccessCode()) openAccessCodeModal({ reason: 'first' });
-  setLoginBusy(true, 'Connexion Supabase…');
-  try {
-    await connect();
-    toast('⚡ Supabase connecté', '#3ecf8e');
-  } catch (e) {
-    console.warn('Supabase indisponible, mode local :', sbStatus.error);
-    toast('Mode hors ligne (Supabase indisponible)', '#e67e22');
-  }
-  await loadUsers();
-  setLoginBusy(false);
-  const user = restoreSession();
-  if (user) applyUser(user);
-
-  if (sbStatus.connected) {
-    ['hm_app_data', 'hm_events'].forEach((table) =>
-      subscribe(table, async (payload) => {
-        const key = payload.new?.key ?? payload.old?.key ?? payload.new?.id ?? payload.old?.id;
-        // Re-lecture systématique : payload.new.data peut être null avec jsonb.
-        const fresh = table === 'hm_app_data' && key ? await kvGet(key).catch(() => null) : null;
-        document.dispatchEvent(new CustomEvent('pilotage:data', { detail: { table, key, fresh, payload } }));
-      })
-    );
-  }
+// Realtime : démarre APRÈS la connexion (les données sont protégées par la RLS : il faut un jeton utilisateur).
+let unsubscribers = [];
+function startRealtime() {
+  stopRealtime();
+  if (!sbStatus.connected) return;
+  unsubscribers = ['hm_app_data', 'hm_events'].map((table) =>
+    subscribe(table, async (payload) => {
+      const key = payload.new?.key ?? payload.old?.key ?? payload.new?.id ?? payload.old?.id;
+      // Re-lecture systématique : payload.new.data peut être null avec jsonb.
+      const fresh = table === 'hm_app_data' && key ? await kvGet(key).catch(() => null) : null;
+      document.dispatchEvent(new CustomEvent('pilotage:data', { detail: { table, key, fresh, payload } }));
+    })
+  );
+}
+function stopRealtime() {
+  unsubscribers.forEach((off) => { try { off(); } catch (e) { /* déjà fermé */ } });
+  unsubscribers = [];
 }
 
+// Démarrage : connexion Supabase (timeout 8 s), puis réouverture de la session mémorisée.
+async function bootstrapData() {
+  purgeLegacyStorage();
+  setLoginBusy(true, 'Connexion au serveur…');
+  try {
+    await connect();
+  } catch (e) {
+    console.warn('Supabase indisponible :', sbStatus.error);
+    toast('Serveur injoignable : connexion impossible pour le moment', '#e67e22');
+  }
+  let user = null;
+  if (sbStatus.connected) {
+    try { user = await restoreSession(); } catch (e) { console.warn('Session :', e.message); }
+  }
+  setLoginBusy(false);
+  refreshLoginStatus();
+  if (user) { applyUser(user); startRealtime(); }
+}
+
+// Session expirée ou droits refusés par la base : on invite à se reconnecter.
+document.addEventListener('pilotage:denied', () => toast('Accès refusé : reconnectez-vous (session expirée ?)', '#e74c3c'));
 
 const ensureViewRegistry = () => {
   const routeNames = [...document.querySelectorAll('[data-view]')].map((el) => el.dataset.view);
@@ -173,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', syncHeaderHeight);
   window.addEventListener('load', syncHeaderHeight);
   document.fonts?.ready?.then(syncHeaderHeight);
+  initLoginConnection();
   initDashboard();
   initTasks();
   initResults();
@@ -180,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initSettings();
   initLive();
   initNotifications();
-  initAccessCode();
   window.addEventListener('online', () => flushPending());
   bootstrapData();
   window.appRouter = router;

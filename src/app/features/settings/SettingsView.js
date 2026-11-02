@@ -1,8 +1,7 @@
 import { getCurrentUser, isDirector } from '../../services/auth.js';
 import { store, SHARED } from '../../core/store.js';
 import { saveShared } from '../../core/persist.js';
-import { connect, getClient, kvSet, sbStatus } from '../../services/supabase.js';
-import { loadConfig, saveConfig, clearConfig } from '../../services/config.js';
+import { sbStatus, explainError } from '../../services/supabase.js';
 import { usersSectionHtml, handleUserAction } from './UsersSection.js';
 import { rayonsSectionHtml, handleRayonAction } from './RayonsSection.js';
 import { planningSectionHtml, handlePlanningAction } from './PlanningSection.js';
@@ -56,21 +55,10 @@ function companyHtml() {
 }
 
 function connectionHtml() {
-  const cfg = loadConfig(), ok = sbStatus.connected;
-  return `<div class="settings-card" style="border-left:4px solid #3ecf8e;"><h3>⚡ Connexion Supabase</h3>
-    <div style="padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:12px;background:${ok ? '#3ecf8e22' : '#e74c3c22'};color:${ok ? '#1a7a50' : '#c0392b'}">${ok ? '✅ Connecté' : '⚠️ Non connecté — mode local' + (sbStatus.error ? ' (' + esc(sbStatus.error) + ')' : '')}</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">Diagnostic : SDK ${window.supabase ? '✅ chargé' : '❌ non chargé (bloqué ?)'} · Projet ${esc((cfg.projectUrl || '').replace(/^https?:\/\//, '').slice(0, 40))} · Clé ${cfg.anonKey ? '✅ ' + esc(cfg.anonKey.slice(0, 10)) + '…' : '❌ absente'} · Code d'accès ${cfg.appSecret ? '✅ défini' : '❌ non défini'}</div>
-    <div class="settings-grid">
-      <div class="sf-group full-width"><label class="sf-label">Project URL</label><input type="text" class="sf-input" id="cfg-url" value="${esc(cfg.projectUrl)}" placeholder="https://xxxx.supabase.co"></div>
-      <div class="sf-group full-width"><label class="sf-label">Clé publique (anon / publishable)</label><input type="text" class="sf-input" id="cfg-key" value="${esc(cfg.anonKey)}"></div>
-      <div class="sf-group full-width"><label class="sf-label">Secret applicatif (à recopier à l'identique dans supabase-setup.sql)</label>
-        <div style="display:flex;gap:6px;"><input type="text" class="sf-input" id="cfg-secret" value="${esc(cfg.appSecret)}" autocomplete="off" spellcheck="false" style="flex:1;font-family:monospace;">
-        <button type="button" class="btn-primary" data-action="cfg-secret-copy" style="background:#fff;color:#333;">📋 Copier</button>
-        <button type="button" class="btn-primary" data-action="cfg-secret-toggle" style="background:#fff;color:#333;" title="Masquer / afficher">👁️</button></div></div></div></div>
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="btn-primary" data-action="cfg-save" style="background:#3ecf8e;border-color:#3ecf8e;color:#fff;">⚡ Enregistrer et reconnecter</button>
-      <button type="button" class="btn-primary" data-action="cfg-test" style="background:#fff;color:#333;">🧪 Tester l'écriture</button>
-      <button type="button" class="btn-danger" data-action="cfg-reset">Valeurs par défaut</button></div></div>`;
+  const ok = sbStatus.connected;
+  return `<div class="settings-card" style="border-left:4px solid #3ecf8e;"><h3>⚡ Connexion</h3>
+    <div style="padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:${ok ? '#3ecf8e22' : '#e74c3c22'};color:${ok ? '#1a7a50' : '#c0392b'}">${ok ? '✅ Connecté au serveur' : '⚠️ Serveur injoignable' + (sbStatus.error ? ' — ' + esc(explainError(sbStatus.error)) : '')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;">Chaque utilisateur se connecte avec son propre compte. Il n'y a plus de code d'accès partagé : pour retirer l'accès à quelqu'un, désactivez son compte dans « Utilisateurs ».</div></div>`;
 }
 
 const backupHtml = () => `<div class="settings-card"><h3>💾 Sauvegarde</h3>
@@ -97,24 +85,6 @@ async function saveCompany() {
   const r = await saveShared('companyData');
   applyCompanyBranding();
   syncToast(r, '✅ Paramètres enregistrés', '⚠️ Enregistré sur cet appareil — synchronisation en attente');
-}
-
-async function saveConnection() {
-  const cfg = { projectUrl: $('cfg-url').value.trim(), anonKey: $('cfg-key').value.trim(), appSecret: $('cfg-secret').value };
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(cfg.projectUrl) || !cfg.anonKey) return toast('⚠️ URL (https://xxxx.supabase.co) et clé requises', '#e74c3c');
-  if (!cfg.appSecret) return toast('⚠️ Saisissez le code d\'accès', '#e74c3c');
-  const previous = loadConfig();
-  try { await connect(cfg); }
-  catch (e) { await connect(previous).catch(() => {}); return toast('❌ Connexion impossible : ' + e.message, '#e74c3c'); }
-  saveConfig(cfg);
-  toast('✅ Connecté — rechargement…', '#3ecf8e');
-  setTimeout(() => window.location.reload(), 900);
-}
-
-async function testWrite() {
-  if (!getClient()) return toast('Non connecté à Supabase', '#e74c3c');
-  try { await kvSet('hm_ping', { t: Date.now(), by: getCurrentUser()?.name || '?' }); toast('✅ Supabase OK — écriture réussie', '#3ecf8e'); }
-  catch (e) { toast('❌ Écriture refusée : ' + e.message + ' (secret ou policies RLS ?)', '#e74c3c'); }
 }
 
 function exportBackup() {
@@ -154,15 +124,6 @@ export function initSettings() {
     if (a.startsWith('plan-')) return handlePlanningAction(a, renderSettings);
     if (a === 'company-save') return saveCompany();
     if (a === 'logo-remove') { store.companyData.logo = null; const r = await saveShared('companyData'); applyCompanyBranding(); renderSettings(); return syncToast(r, 'Logo retiré', '⚠️ Retiré localement — synchronisation en attente'); }
-    if (a === 'cfg-save') return saveConnection();
-    if (a === 'cfg-secret-toggle') { const i = $('cfg-secret'); i.type = i.type === 'text' ? 'password' : 'text'; return; }
-    if (a === 'cfg-secret-copy') {
-      try { await navigator.clipboard.writeText($('cfg-secret').value); toast('📋 Secret copié', '#27ae60'); }
-      catch (err) { $('cfg-secret').select(); toast('Sélectionné : faites Ctrl+C pour copier', '#f39c12'); }
-      return;
-    }
-    if (a === 'cfg-test') return testWrite();
-    if (a === 'cfg-reset') { clearConfig(); return renderSettings(); }
     if (a === 'backup-export') return exportBackup();
   });
   document.addEventListener('change', async (e) => {

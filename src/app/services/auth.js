@@ -1,199 +1,196 @@
-import { kvGet, kvSet } from './supabase.js';
+import { CONFIG } from './config.js';
+import { getClient } from './supabase.js';
 
-const USERS_KEY = 'hm_users';
-const SESSION_KEY = 'pilotage-session';
-const PBKDF2_ITERATIONS = 100000;
+// ═══════════════════════════════════════════════════════════════════════
+// Authentification : Supabase Auth (mots de passe hachés côté serveur, jetons signés).
+// Le rôle (directeur, chef de secteur…) vient de la table `profiles`, protégée par la RLS :
+// le navigateur ne peut ni le choisir ni le modifier. La gestion des comptes passe par
+// l'Edge Function `admin-users` (réservée au Directeur).
+// ═══════════════════════════════════════════════════════════════════════
+
+const MIN_PASSWORD = 10;
+const PROFILE_CACHE = 'hm_profile_cache';   // dernier profil connu : permet de rouvrir l'application hors ligne
 
 let users = [];
 let currentUser = null;
 
-// ── Hash ────────────────────────────────────────────────────
-const toHex = (buf) =>
-  [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-async function pbkdf2(password, saltHex) {
-  const enc = new TextEncoder();
-  const salt = Uint8Array.from(saltHex.match(/.{2}/g).map((h) => parseInt(h, 16)));
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    key,
-    256
-  );
-  return toHex(bits);
+// Même règle que le serveur : « Crémerie » → « cremerie », « bazar/le » → « bazar.le ».
+export function sanitizeUsername(raw) {
+  let s = String(raw ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  s = s.replace(/[^a-z0-9._-]+/g, '.').replace(/\.{2,}/g, '.').replace(/^[._-]+|[._-]+$/g, '');
+  return s.slice(0, 30).replace(/[._-]+$/g, '');
 }
+const toEmail = (username) => `${sanitizeUsername(username)}@${CONFIG.emailDomain}`;
 
-// Ancien hash (v3, FNV-1a 32 bits) : conservé UNIQUEMENT pour migrer les comptes existants.
-function legacyHash(s) {
-  let h = 0x811c9dc5;
-  const full = s + '_hm_tarabet_sec';
-  for (let i = 0; i < full.length; i++) {
-    h ^= full.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
-}
-
-export async function makeHash(password) {
-  const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
-  return `pbkdf2$${salt}$${await pbkdf2(password, salt)}`;
-}
-
-async function verifyPassword(password, user) {
-  const stored = user.passwordHash || '';
-  if (stored.startsWith('pbkdf2$')) {
-    const [, salt, hash] = stored.split('$');
-    return { ok: (await pbkdf2(password, salt)) === hash, upgrade: false };
-  }
-  return { ok: stored === legacyHash(password), upgrade: true };
-}
-
-// ── Utilisateurs ────────────────────────────────────────────
-const DIRTY_KEY = 'hm_users_dirty';       // modifications locales pas encore envoyées à Supabase
-const readLocalUsers = () => {
-  try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]') || []; }
-  catch (e) { return []; }
-};
-
-async function seedAdmin() {
-  // Premier démarrage : compte directeur avec mot de passe provisoire à changer.
+function fromProfile(p) {
   return {
-    id: 'u_admin', name: 'Directeur', username: 'admin',
-    passwordHash: await makeHash('1234'), mustChangePassword: true,
-    systemRole: 'directeur', ownRoleId: null, evaluableRoleIds: [],
-    active: true, createdAt: new Date().toISOString()
+    id: p.id, name: p.name, username: p.username, systemRole: p.system_role,
+    ownRoleId: p.own_role_id || null, evaluableRoleIds: p.evaluable_role_ids || [],
+    active: p.active !== false, mustChangePassword: !!p.must_change_password, createdAt: p.created_at
   };
 }
 
-export async function saveUsers() {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  try { await kvSet(USERS_KEY, users); localStorage.removeItem(DIRTY_KEY); return true; }
-  catch (e) { localStorage.setItem(DIRTY_KEY, '1'); console.warn('Sync utilisateurs impossible :', e.message); return false; }
+const needClient = () => {
+  const c = getClient();
+  if (!c) throw new Error('Supabase injoignable : vérifiez le réseau puis réessayez');
+  return c;
+};
+
+async function fetchProfile(id) {
+  const { data, error } = await needClient().from('profiles').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? fromProfile(data) : null;
 }
 
-// Supabase fait foi (sinon une suppression faite sur un appareil ressusciterait depuis un autre).
-// Exception : des modifications locales non envoyées (hors ligne) sont conservées puis poussées.
+// ── Utilisateurs ────────────────────────────────────────────────────────
+// Liste des comptes (noms pour le planning, « assignée à »…). Nécessite d'être connecté.
 export async function loadUsers() {
-  const local = readLocalUsers();
-  let remote = null;
-  try { remote = await kvGet(USERS_KEY); } catch (e) { console.warn('Lecture utilisateurs :', e.message); }
-
-  if (Array.isArray(remote) && remote.length && !localStorage.getItem(DIRTY_KEY)) users = remote;
-  else users = local.length ? local : (Array.isArray(remote) ? remote : []);
-
-  if (!users.find((u) => u.username === 'admin')) users.unshift(await seedAdmin());
-  await saveUsers();
+  const c = getClient();
+  if (!c) return users;
+  const { data, error } = await c.from('profiles').select('*').order('name');
+  if (error) { console.warn('Lecture des utilisateurs :', error.message); return users; }
+  users = (data || []).map(fromProfile);
   return users;
 }
 
 export const getUsers = () => users;
+export const saveUsers = async () => true;   // plus de copie locale : la base fait foi
 
-const normUsername = (u) => String(u || '').trim().toLowerCase();
-const usernameTaken = (username, exceptId) => users.some((u) => normUsername(u.username) === username && u.id !== exceptId);
-
-function checkProfile({ name, username }, exceptId) {
-  if (!String(name || '').trim() || !username) throw new Error('Nom et identifiant requis');
-  if (!/^[a-z0-9._-]{2,30}$/.test(username)) throw new Error('Identifiant : 2 à 30 caractères (lettres, chiffres, . _ -)');
-  if (usernameTaken(username, exceptId)) throw new Error('Cet identifiant est déjà utilisé');
+async function callAdmin(action, payload = {}) {
+  const { data, error } = await needClient().functions.invoke(CONFIG.adminFunction, { body: { action, ...payload } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch (e) { /* message générique */ }
+    throw new Error(msg);
+  }
+  return data;
 }
 
+function checkPasswordInput(pw) {
+  if (pw && pw.length < MIN_PASSWORD) throw new Error(`Mot de passe : ${MIN_PASSWORD} caractères minimum (ou laissez vide pour en générer un)`);
+}
+
+// Création : mot de passe facultatif (généré par le serveur si vide). Retourne tempPassword à remettre à l'intéressé.
 export async function createUser({ name, username, password, systemRole, ownRoleId, evaluableRoleIds }) {
-  const uname = normUsername(username);
-  checkProfile({ name, username: uname });
-  if (!password || password.length < 6) throw new Error('Mot de passe : 6 caractères minimum');
-  const user = {
-    id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name.trim(), username: uname,
-    passwordHash: await makeHash(password), systemRole, ownRoleId: ownRoleId || null,
-    evaluableRoleIds: evaluableRoleIds || [], active: true, createdAt: new Date().toISOString()
-  };
-  users.push(user);
-  return { user, synced: await saveUsers() };
+  checkPasswordInput(password);
+  const r = await callAdmin('create', {
+    name, username: sanitizeUsername(username), password: password || undefined,
+    system_role: systemRole, own_role_id: ownRoleId || null, evaluable_role_ids: evaluableRoleIds || []
+  });
+  await loadUsers();
+  return { user: users.find((u) => u.id === r.id), synced: true, tempPassword: r.temp_password };
 }
 
 export async function updateUser(id, { name, username, systemRole, ownRoleId, evaluableRoleIds }) {
-  const u = users.find((x) => x.id === id);
-  if (!u) throw new Error('Utilisateur introuvable');
-  const uname = normUsername(username);
-  checkProfile({ name, username: uname }, id);
-  if (u.systemRole === 'directeur' && systemRole !== 'directeur' && users.filter((x) => x.systemRole === 'directeur' && x.active !== false).length < 2)
-    throw new Error('Il doit rester au moins un Directeur actif');
-  Object.assign(u, { name: name.trim(), username: uname, systemRole, ownRoleId: ownRoleId || null, evaluableRoleIds: evaluableRoleIds || [] });
-  return { user: u, synced: await saveUsers() };
+  await callAdmin('update', {
+    id, name, username: sanitizeUsername(username), system_role: systemRole,
+    own_role_id: ownRoleId || null, evaluable_role_ids: evaluableRoleIds || []
+  });
+  await loadUsers();
+  return { user: users.find((u) => u.id === id), synced: true };
 }
 
 export async function resetPassword(id, newPassword) {
-  if (!newPassword || newPassword.length < 6) throw new Error('Mot de passe : 6 caractères minimum');
-  const u = users.find((x) => x.id === id);
-  if (!u) throw new Error('Utilisateur introuvable');
-  u.passwordHash = await makeHash(newPassword);
-  u.mustChangePassword = false;
-  return { synced: await saveUsers() };
+  checkPasswordInput(newPassword);
+  const r = await callAdmin('reset_password', { id, password: newPassword || undefined });
+  return { synced: true, tempPassword: r.temp_password };
 }
-
-// Changement par l'utilisateur lui-même : exige l'ancien mot de passe.
-export async function changeOwnPassword(current, next) {
-  if (!currentUser) throw new Error('Non connecté');
-  if (!(await verifyPassword(current, currentUser)).ok) throw new Error('Mot de passe actuel incorrect');
-  await changePassword(currentUser.id, next);
-}
-
-const activeDirectors = () => users.filter((x) => x.systemRole === 'directeur' && x.active !== false);
 
 export async function setUserActive(id, active) {
-  const u = users.find((x) => x.id === id);
-  if (!u) throw new Error('Utilisateur introuvable');
-  if (!active && (id === currentUser?.id || (u.systemRole === 'directeur' && activeDirectors().length < 2))) throw new Error('Impossible de désactiver ce compte');
-  u.active = active;
-  return { synced: await saveUsers() };
+  if (!active && id === currentUser?.id) throw new Error('Impossible de désactiver votre propre compte');
+  await callAdmin('set_active', { id, active });
+  await loadUsers();
+  return { synced: true };
 }
 
 export async function deleteUser(id) {
-  const u = users.find((x) => x.id === id);
-  if (!u) throw new Error('Utilisateur introuvable');
-  if (id === currentUser?.id || (u.systemRole === 'directeur' && activeDirectors().length < 2 && u.active !== false)) throw new Error('Impossible de supprimer ce compte');
-  users = users.filter((x) => x.id !== id);
-  return { synced: await saveUsers() };
+  if (id === currentUser?.id) throw new Error('Impossible de supprimer votre propre compte');
+  await callAdmin('delete', { id, confirm: true });
+  await loadUsers();
+  return { synced: true };
 }
 
-// ── Session ─────────────────────────────────────────────────
+// ── Session ─────────────────────────────────────────────────────────────
 export const getCurrentUser = () => currentUser;
+export const isDirector = (u = currentUser) => !!u && u.systemRole === 'directeur';
+
+function rememberProfile(user) {
+  try { localStorage.setItem(PROFILE_CACHE, JSON.stringify(user)); } catch (e) { /* quota : sans importance */ }
+}
+const forgetProfile = () => { try { localStorage.removeItem(PROFILE_CACHE); } catch (e) { /* ignoré */ } };
 
 export async function login(username, password) {
-  const name = (username || '').trim().toLowerCase();
-  const user = users.find((u) => (u.username || '').toLowerCase() === name);
-  if (!user || user.active === false) throw new Error('Identifiant ou mot de passe incorrect');
-
-  const { ok, upgrade } = await verifyPassword(password, user);
-  if (!ok) throw new Error('Identifiant ou mot de passe incorrect');
-
-  if (upgrade) {                       // migration transparente vers PBKDF2
-    user.passwordHash = await makeHash(password);
-    delete user._pwChanged;
-    await saveUsers();
+  const client = needClient();
+  if (!String(username || '').trim() || !password) throw new Error('Identifiant et mot de passe requis');
+  const { data, error } = await client.auth.signInWithPassword({ email: toEmail(username), password });
+  if (error) {
+    if (error.status === 429 || /rate limit|too many/i.test(error.message)) throw new Error('Trop de tentatives : patientez quelques minutes');
+    if (error.status === 400 || error.status === 401 || /invalid|credentials/i.test(error.message)) throw new Error('Identifiant ou mot de passe incorrect');
+    throw new Error(error.message || 'Connexion impossible');
+  }
+  const user = await fetchProfile(data.user.id);
+  if (!user || !user.active) {
+    await client.auth.signOut({ scope: 'local' });
+    throw new Error('Compte désactivé ou introuvable : contactez le Directeur');
   }
   currentUser = user;
-  sessionStorage.setItem(SESSION_KEY, user.id);
+  rememberProfile(user);
+  await loadUsers();
   return user;
 }
 
-export function restoreSession() {
-  const id = sessionStorage.getItem(SESSION_KEY);
-  currentUser = users.find((u) => u.id === id && u.active !== false) || null;
+// Rouvre la session mémorisée par Supabase (jeton rafraîchi automatiquement). Hors ligne : profil mis en cache.
+export async function restoreSession() {
+  const client = getClient();
+  if (!client) return null;
+  const { data } = await client.auth.getSession();
+  const session = data?.session;
+  if (!session) { currentUser = null; forgetProfile(); return null; }
+  try {
+    const user = await fetchProfile(session.user.id);
+    if (!user || !user.active) { await client.auth.signOut({ scope: 'local' }); currentUser = null; forgetProfile(); return null; }
+    currentUser = user;
+    rememberProfile(user);
+  } catch (e) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(PROFILE_CACHE) || 'null');
+      currentUser = cached && cached.id === session.user.id ? cached : null;
+    } catch (err) { currentUser = null; }
+  }
+  if (currentUser) await loadUsers();
   return currentUser;
 }
 
-export function logout() {
+// Déconnexion de CET appareil seulement (les autres appareils du même compte restent connectés).
+export async function logout() {
   currentUser = null;
-  sessionStorage.removeItem(SESSION_KEY);
+  users = [];
+  forgetProfile();
+  try { await getClient()?.auth.signOut({ scope: 'local' }); } catch (e) { /* déjà déconnecté */ }
 }
 
+// ── Mot de passe ────────────────────────────────────────────────────────
+// Premier accès (mot de passe provisoire) ou changement : met à jour Auth puis lève le drapeau « à changer ».
 export async function changePassword(userId, newPassword) {
-  if (!newPassword || newPassword.length < 6) throw new Error('6 caractères minimum');
-  const user = users.find((u) => u.id === userId);
-  if (!user) throw new Error('Utilisateur introuvable');
-  user.passwordHash = await makeHash(newPassword);
-  user.mustChangePassword = false;
-  await saveUsers();
+  if (!currentUser || (userId && userId !== currentUser.id)) throw new Error('Non autorisé');
+  if (!newPassword || newPassword.length < MIN_PASSWORD) throw new Error(`${MIN_PASSWORD} caractères minimum`);
+  const client = needClient();
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (error) {
+    if (/same|different/i.test(error.message)) throw new Error('Le nouveau mot de passe doit être différent de l\'actuel');
+    if (/weak|short|password/i.test(error.message)) throw new Error('Mot de passe refusé : choisissez-en un plus long ou moins courant');
+    throw new Error(error.message);
+  }
+  const ack = await client.rpc('ack_password_changed');
+  if (ack.error) console.warn('ack_password_changed :', ack.error.message);
+  currentUser.mustChangePassword = false;
+  rememberProfile(currentUser);
 }
 
-export const isDirector = (u = currentUser) => !!u && u.systemRole === 'directeur';
+// Changement par l'utilisateur lui-même : exige l'ancien mot de passe (revérifié auprès du serveur).
+export async function changeOwnPassword(current, next) {
+  if (!currentUser) throw new Error('Non connecté');
+  const { error } = await needClient().auth.signInWithPassword({ email: toEmail(currentUser.username), password: current });
+  if (error) throw new Error('Mot de passe actuel incorrect');
+  await changePassword(currentUser.id, next);
+}

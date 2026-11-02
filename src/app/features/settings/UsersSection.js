@@ -41,7 +41,7 @@ function formBody(u) {
   const roles = getAllRoles();
   return `<div class="modal-field"><label>Nom complet</label><input type="text" id="uf-name" value="${esc(u?.name || '')}" placeholder="Prénom NOM" maxlength="60"></div>
     <div class="modal-field"><label>Identifiant (login)</label><input type="text" id="uf-username" value="${esc(u?.username || '')}" autocomplete="off" maxlength="30"></div>
-    ${u ? '' : `<div class="modal-field"><label>Mot de passe (6 caractères minimum)</label><input type="password" id="uf-pw" autocomplete="new-password"></div>
+    ${u ? '' : `<div class="modal-field"><label>Mot de passe (10 caractères minimum — laissez vide pour en générer un)</label><input type="password" id="uf-pw" autocomplete="new-password"></div>
       <div class="modal-field"><label>Confirmer le mot de passe</label><input type="password" id="uf-pw2" autocomplete="new-password"></div>`}
     <div class="modal-field"><label>Rôle système</label><select id="uf-sysrole">${Object.entries(ROLE_LABELS).map(([k, v]) => `<option value="${k}"${u?.systemRole === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
     <div class="modal-field" id="uf-own-wrap"><label>Son propre poste dans l'application</label><select id="uf-ownrole"><option value="">— Aucun —</option>${roles.map((r) => `<option value="${esc(r.id)}"${u?.ownRoleId === r.id ? ' selected' : ''}>${r.icon} ${esc(r.label)}</option>`).join('')}</select></div>
@@ -71,6 +71,22 @@ function wireForm(root) {
   root.querySelector('#uf-name').focus();
 }
 
+// Mot de passe provisoire : affiché UNE seule fois, à remettre en main propre (jamais par message).
+function showCredentials(name, username, tempPassword) {
+  openModal({
+    title: '🔐 Mot de passe provisoire', saveLabel: 'J\'ai noté, fermer',
+    bodyHtml: `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;">Remettez ces informations à <b>${esc(name)}</b> en main propre. Elles ne seront <b>plus affichées</b>. Il devra choisir son propre mot de passe à la première connexion.</div>
+      <div class="modal-field"><label>Identifiant</label><input type="text" readonly value="${esc(username || '')}" style="font-family:monospace;"></div>
+      <div class="modal-field"><label>Mot de passe provisoire</label><input type="text" readonly id="cred-pw" value="${esc(tempPassword)}" style="font-family:monospace;font-size:16px;letter-spacing:1px;"></div>
+      <button type="button" class="user-btn" id="cred-copy" style="margin-top:6px;">📋 Copier le mot de passe</button>`,
+    onOpen: (root) => root.querySelector('#cred-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(tempPassword); toast('📋 Copié', '#27ae60'); }
+      catch (e) { root.querySelector('#cred-pw').select(); toast('Sélectionné : faites Ctrl+C', '#f39c12'); }
+    }),
+    onSave: () => {}
+  });
+}
+
 const syncMsg = (ok, msg) => toast(ok ? msg : msg + ' — ⚠️ synchronisation en attente', ok ? '#27ae60' : '#e67e22');
 
 export function openUserForm(userId, onDone) {
@@ -86,6 +102,7 @@ export function openUserForm(userId, onDone) {
           if (v('#uf-pw') !== v('#uf-pw2')) { toast('Les mots de passe ne correspondent pas', '#e74c3c'); return false; }
           const r = await createUser({ ...data, password: v('#uf-pw') });
           syncMsg(r.synced, `✅ ${data.name} créé — ${data.evaluableRoleIds.length} fonction(s)`);
+          if (r.tempPassword) { onDone(); setTimeout(() => showCredentials(r.user?.name || data.name, r.user?.username, r.tempPassword), 50); return; }
         }
         onDone();
       } catch (e) { toast(e.message, '#e74c3c'); return false; }
@@ -98,11 +115,15 @@ export function openResetPassword(userId, onDone) {
   if (!u) return;
   openModal({
     title: `🔑 Réinitialiser — ${u.name}`, saveLabel: 'Enregistrer',
-    bodyHtml: '<div class="modal-field"><label>Nouveau mot de passe (6 caractères minimum)</label><input type="password" id="rp-1" autocomplete="new-password"></div><div class="modal-field"><label>Confirmer</label><input type="password" id="rp-2" autocomplete="new-password"></div>',
+    bodyHtml: '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Laissez vide pour générer un mot de passe provisoire (recommandé) ; sinon 10 caractères minimum. L\'utilisateur devra le changer à sa prochaine connexion.</div><div class="modal-field"><label>Nouveau mot de passe</label><input type="password" id="rp-1" autocomplete="new-password"></div><div class="modal-field"><label>Confirmer</label><input type="password" id="rp-2" autocomplete="new-password"></div>',
     onOpen: (root) => root.querySelector('#rp-1').focus(),
     onSave: async (root) => {
       if (root.querySelector('#rp-1').value !== root.querySelector('#rp-2').value) { toast('Les mots de passe ne correspondent pas', '#e74c3c'); return false; }
-      try { const r = await resetPassword(userId, root.querySelector('#rp-1').value); syncMsg(r.synced, '✅ Mot de passe modifié'); onDone(); }
+      try {
+        const r = await resetPassword(userId, root.querySelector('#rp-1').value);
+        syncMsg(r.synced, '✅ Mot de passe modifié'); onDone();
+        if (r.tempPassword) setTimeout(() => showCredentials(u.name, u.username, r.tempPassword), 50);
+      }
       catch (e) { toast(e.message, '#e74c3c'); return false; }
     }
   });
@@ -120,7 +141,7 @@ export async function handleUserAction(action, userId, onDone) {
       return onDone();
     }
     if (action === 'user-del') {
-      if (!window.confirm('Supprimer définitivement cet utilisateur ?\n(Son historique de tâches est conservé.)')) return;
+      if (!window.confirm('Supprimer définitivement cet utilisateur ?\nSes cases cochées, notes et historique seront AUSSI effacés.\nPréférez « Désactiver » (🚫) pour conserver l\'historique.')) return;
       const r = await deleteUser(userId); syncMsg(r.synced, 'Utilisateur supprimé'); onDone();
     }
   } catch (e) { toast(e.message, '#e74c3c'); }

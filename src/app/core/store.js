@@ -87,10 +87,9 @@ export async function refreshCompletions() {
 let eventsReady = false;
 export async function refreshEvents() {
   if (!getClient()) return;
-  const { data, error } = await getClient().from('hm_events').select('id,data');
-  if (error) throw error;
+  const rows = await getAll('hm_events');
   const evts = {};
-  (data || []).forEach((r) => { if (r.data) evts[r.id] = r.data; });
+  rows.forEach((r) => { if (r.data) evts[r.id] = r.data; });
   const prev = store.events;
   store.events = evts;
   if (eventsReady && typeof document !== 'undefined') {            // nouveaux événements « tâche faite » depuis le dernier relevé

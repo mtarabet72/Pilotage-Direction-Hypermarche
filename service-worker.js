@@ -3,7 +3,7 @@
 // Version : hm-supabase-v2
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'pilotage-hm-v3';
+const CACHE_NAME = 'pilotage-hm-v4';
 const ASSETS = [
   './',
   './index.html',

@@ -1,6 +1,6 @@
 import { store, SHARED } from './store.js';
 import { getCurrentUser, isDirector } from '../services/auth.js';
-import { kvSet, kvDelete, kvGet, getAll, getClient } from '../services/supabase.js';
+import { kvSet, kvDelete, kvGet, kvList, getAll, getClient } from '../services/supabase.js';
 
 const result = async (fn) => {
   if (!getClient()) return { synced: false };
@@ -40,13 +40,13 @@ export async function purgeTaskData(roleId, taskId) {
       Object.keys(data).forEach((k) => { if (k.includes(marker)) delete data[k]; });
       return kvSet(r.user_id, data, 'hm_completions');
     }));
-    const evs = await getClient().from('hm_events').select('id').like('id', `%${marker}%`.replace(/_/g, '\\_'));
-    await Promise.all((evs.data || []).map((e) => kvDelete(e.id, 'hm_events')));
-    // notes : on neutralise dans chaque ligne par utilisateur et dans l'ancien objet partagé
-    const noteRows = await getClient().from('hm_app_data').select('key,data').like('key', 'hm\\_task\\_notes%');
-    await Promise.all((noteRows.data || []).filter((r) => r.data && Object.keys(r.data).some((k) => k.includes(marker))).map((r) => {
+    const evs = (await getAll('hm_events')).filter((e) => String(e.id).includes(marker));
+    await Promise.all(evs.map((e) => kvDelete(e.id, 'hm_events')));
+    // notes : on neutralise dans la ligne de chaque utilisateur
+    const noteRows = await kvList('hm_task_notes_');
+    await Promise.all(noteRows.filter((r) => r.data && typeof r.data === 'object' && Object.keys(r.data).some((k) => k.includes(marker))).map((r) => {
       const data = { ...r.data };
-      Object.keys(data).forEach((k) => { if (k.includes(marker)) { if (r.key === 'hm_task_notes') delete data[k]; else data[k] = null; } });
+      Object.keys(data).forEach((k) => { if (k.includes(marker)) data[k] = null; });
       return kvSet(r.key, data);
     }));
     return { synced: true };
