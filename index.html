@@ -2,12 +2,14 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://qpszmqkbhrqlycgdkgop.supabase.co wss://qpszmqkbhrqlycgdkgop.supabase.co; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Pilotage Hypermarché — Direction</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./vendor/fonts.css">
 <link rel="stylesheet" href="./src/styles/app.css">
 <link rel="stylesheet" href="./src/app/features/tasks/tasks.css">
 <link rel="stylesheet" href="./src/app/features/results/results.css">
@@ -16,10 +18,10 @@
 <!-- PWA Manifest -->
 <link rel="manifest" href="./manifest.json">
 <!-- Supabase SDK -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
+<script src="./vendor/supabase-js-2.117.3.min.js"></script>
 <!-- html2canvas + jsPDF pour export PDF A4 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="./vendor/html2canvas-1.4.1.min.js"></script>
+<script src="./vendor/jspdf-2.5.1.umd.min.js"></script>
 <style>
 :root{
   --bg:#eef0f5;--white:#fff;--border:#e2e6ed;--text:#1a1f2e;--muted:#8892a4;
@@ -182,7 +184,7 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
         <button class="pw-eye" id="btn-pw-eye" type="button">👁️</button>
       </div>
     </div>
-    <button class="login-btn" id="btn-login" type="button" onclick="doLogin()">🔐 Connexion</button>
+    <button class="login-btn" id="btn-login" type="button" data-act="doLogin">🔐 Connexion</button>
     <div id="sb-loading-hint" style="display:none;font-size:11px;color:#3ecf8e;text-align:center;margin-top:6px;font-weight:600;"></div>
     <div class="login-error" id="login-error"></div>
 
@@ -197,34 +199,34 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
       <div class="hdr-title" id="hdr-company-name">PILOTAGE OPÉRATIONNEL — DIRECTION HYPERMARCHÉ</div>
       <div class="hdr-sub" id="hdr-company-sub">Suivi des tâches · Dashboard global</div>
     </div>
-    <div class="hdr-user-badge" onclick="showUserMenu()" id="hdr-user-badge">
+    <div class="hdr-user-badge" data-act="showUserMenu" id="hdr-user-badge">
       <span class="hdr-user-dot" id="hdr-user-dot" style="background:#27ae60"></span>
       <span id="hdr-user-name">—</span>
       <span>▾</span>
     </div>
     <div id="hdr-live-btn-wrap" style="display:none;">
-      <button onclick="openLivePanel()" style="padding:5px 10px;border-radius:20px;border:none;cursor:pointer;background:rgba(39,174,96,.18);color:#27ae60;font-size:10px;font-weight:800;display:flex;align-items:center;gap:6px;">
+      <button data-act="openLivePanel" style="padding:5px 10px;border-radius:20px;border:none;cursor:pointer;background:rgba(39,174,96,.18);color:#27ae60;font-size:10px;font-weight:800;display:flex;align-items:center;gap:6px;">
         <span style="width:7px;height:7px;border-radius:50%;background:#27ae60;animation:lpPulse 1.5s infinite;display:inline-block;flex-shrink:0;"></span>Live Admin
       </button>
     </div>
   </div>
   <div class="hdr-tabs" id="hdr-tabs">
-    <button class="hdr-tab active" data-view-switch="dashboard" onclick="showView('dashboard')">📊 Dashboard</button>
-    <button class="hdr-tab" data-view-switch="tasks" onclick="showView('tasks')">✅ Suivi Tâches</button>
-    <button class="hdr-tab" data-view-switch="results" onclick="showView('results')">📈 Résultats</button>
-    <button class="hdr-tab" data-view-switch="export" onclick="showView('export')">📄 Export PDF</button>
-    <button class="hdr-tab" id="tab-settings" data-view-switch="settings" onclick="showView('settings')" style="display:none;">⚙️ Paramètres</button>
+    <button class="hdr-tab active" data-view-switch="dashboard" data-act="showView" data-args='["dashboard"]'>📊 Dashboard</button>
+    <button class="hdr-tab" data-view-switch="tasks" data-act="showView" data-args='["tasks"]'>✅ Suivi Tâches</button>
+    <button class="hdr-tab" data-view-switch="results" data-act="showView" data-args='["results"]'>📈 Résultats</button>
+    <button class="hdr-tab" data-view-switch="export" data-act="showView" data-args='["export"]'>📄 Export PDF</button>
+    <button class="hdr-tab" id="tab-settings" data-view-switch="settings" data-act="showView" data-args='["settings"]' style="display:none;">⚙️ Paramètres</button>
   </div>
 </div>
 
 <div id="view-dashboard" class="view active" data-view="dashboard">
   <div class="dash-period-row">
     <span style="font-size:11px;font-weight:700;color:var(--muted);">Période :</span>
-    <button class="period-btn active" onclick="setDashPeriod('Q',this)">📅 Aujourd'hui</button>
-    <button class="period-btn" onclick="setDashPeriod('H',this)">📅 Cette semaine</button>
-    <button class="period-btn" onclick="setDashPeriod('M',this)">📅 Ce mois</button>
-    <button class="period-btn" onclick="setDashPeriod('T',this)">📊 Ce trimestre</button>
-    <button class="period-btn" onclick="setDashPeriod('A',this)">📅 Cette année</button>
+    <button class="period-btn active" data-act="setDashPeriod" data-args='["Q"]'>📅 Aujourd'hui</button>
+    <button class="period-btn" data-act="setDashPeriod" data-args='["H"]'>📅 Cette semaine</button>
+    <button class="period-btn" data-act="setDashPeriod" data-args='["M"]'>📅 Ce mois</button>
+    <button class="period-btn" data-act="setDashPeriod" data-args='["T"]'>📊 Ce trimestre</button>
+    <button class="period-btn" data-act="setDashPeriod" data-args='["A"]'>📅 Cette année</button>
     <span id="dash-period-label" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
   </div>
   <div id="dash-summary" class="summary-row"></div>
@@ -232,8 +234,8 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
 </div>
 
 <div id="view-tasks" class="view" data-view="tasks">
-  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
-  <button id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+  <div id="sidebar-overlay" data-act="closeSidebar"></div>
+  <button id="sidebar-toggle" data-act="toggleSidebar">☰</button>
   <div id="sidebar"><div class="sb-label">Fonctions accessibles</div></div>
   <div id="main-tasks">
     <div id="eval-banner" class="show" style="display:none">
@@ -243,27 +245,27 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
     <div id="permanence-banner" style="display:none;"></div>
     <div class="view-mode-toggle">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Vue :</span>
-      <button class="freq-btn" id="view-mode-role" onclick="setViewMode('role')" style="background:var(--accent);color:#fff;border-color:var(--accent);">👤 Par Fonction</button>
-      <button class="freq-btn" id="view-mode-rayon" onclick="setViewMode('rayon')" style="background:#fff;color:#555;border-color:#ccc;">📦 Par Rayon</button>
+      <button class="freq-btn" id="view-mode-role" data-act="setViewMode" data-args='["role"]' style="background:var(--accent);color:#fff;border-color:var(--accent);">👤 Par Fonction</button>
+      <button class="freq-btn" id="view-mode-rayon" data-act="setViewMode" data-args='["rayon"]' style="background:#fff;color:#555;border-color:#ccc;">📦 Par Rayon</button>
     </div>
     <div id="rayon-selector">
-      <select id="selectRayon" onchange="changerRayon()"><option value="">-- Choisir un rayon --</option></select>
+      <select id="selectRayon"><option value="">-- Choisir un rayon --</option></select>
     </div>
     <div id="controls">
-      <button class="freq-btn" data-freq="ALL" onclick="setFreq('ALL')">Toutes</button>
-      <button class="freq-btn" data-freq="Q" onclick="setFreq('Q')">Quotidien</button>
-      <button class="freq-btn" data-freq="H" onclick="setFreq('H')">Hebdomadaire</button>
-      <button class="freq-btn" data-freq="M" onclick="setFreq('M')">Mensuel</button>
-      <button class="freq-btn" data-freq="T" onclick="setFreq('T')">Trimestriel</button>
-      <button class="freq-btn" data-freq="A" onclick="setFreq('A')">Annuel</button>
-      <button id="add-btn" onclick="toggleAddForm()" style="display:none">+ Ajouter tâche</button>
+      <button class="freq-btn" data-freq="ALL" data-act="setFreq" data-args='["ALL"]'>Toutes</button>
+      <button class="freq-btn" data-freq="Q" data-act="setFreq" data-args='["Q"]'>Quotidien</button>
+      <button class="freq-btn" data-freq="H" data-act="setFreq" data-args='["H"]'>Hebdomadaire</button>
+      <button class="freq-btn" data-freq="M" data-act="setFreq" data-args='["M"]'>Mensuel</button>
+      <button class="freq-btn" data-freq="T" data-act="setFreq" data-args='["T"]'>Trimestriel</button>
+      <button class="freq-btn" data-freq="A" data-act="setFreq" data-args='["A"]'>Annuel</button>
+      <button id="add-btn" data-act="toggleAddForm" style="display:none">+ Ajouter tâche</button>
     </div>
     <div id="add-form">
       <h4 id="af-title">➕ Nouvelle tâche</h4>
       <div id="af-panel-manuel">
         <div class="af-row">
-          <input type="text" id="nt-input" placeholder="Libellé de la tâche..." onkeydown="if(event.key==='Enter')saveCustomTask()" style="flex:1;min-width:180px;">
-          <select id="nt-freq" onchange="updatePeriodeFields()" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
+          <input type="text" id="nt-input" placeholder="Libellé de la tâche..." style="flex:1;min-width:180px;">
+          <select id="nt-freq" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
             <option value="Q">📅 Quotidien</option>
             <option value="H">📆 Hebdomadaire</option>
             <option value="M">🗓️ Mensuel</option>
@@ -274,8 +276,8 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
         </div>
       </div>
       <div class="af-row" style="margin-top:12px;">
-        <button class="af-save" id="af-save-btn" onclick="document.getElementById('af-panel-library').style.display!='none'?saveCustomTaskFromLib():saveCustomTask()">✅ Enregistrer la tâche</button>
-        <button class="af-cancel" onclick="closeAddForm()">Annuler</button>
+        <button class="af-save" id="af-save-btn">✅ Enregistrer la tâche</button>
+        <button class="af-cancel">Annuler</button>
       </div>
     </div>
     <div id="task-list"></div>
@@ -291,7 +293,7 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
   <div class="res-card">
     <h3>📈 Résultats par date</h3>
     <div class="date-row">
-      <div class="date-field"><label>Date de référence</label><input type="date" id="res-date" onchange="renderResults()"></div>
+      <div class="date-field"><label>Date de référence</label><input type="date" id="res-date"></div>
     </div>
   </div>
   <div id="results-content"><div style="text-align:center;padding:40px;color:var(--muted);">Sélectionnez une date.</div></div>
@@ -301,8 +303,8 @@ input,select,textarea{font-family:DM Sans,sans-serif;font-size:14px;}
   <div class="export-card">
     <h3>📄 Générer un rapport</h3>
     <div class="type-grid">
-      <div class="type-btn active" data-type="Q" onclick="setExportType('Q',this)"><div class="tb-icon">📅</div><div class="tb-label">Quotidien</div><div class="tb-desc">Tâches du jour</div></div>
-      <div class="type-btn" data-type="H" onclick="setExportType('H',this)"><div class="tb-icon">📆</div><div class="tb-label">Hebdomadaire</div><div class="tb-desc">Tâches de la semaine</div></div>
+      <div class="type-btn active" data-type="Q"><div class="tb-icon">📅</div><div class="tb-label">Quotidien</div><div class="tb-desc">Tâches du jour</div></div>
+      <div class="type-btn" data-type="H"><div class="tb-icon">📆</div><div class="tb-label">Hebdomadaire</div><div class="tb-desc">Tâches de la semaine</div></div>
     </div>
   </div>
 </div>
