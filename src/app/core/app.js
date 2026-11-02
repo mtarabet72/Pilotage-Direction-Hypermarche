@@ -2,6 +2,7 @@ import { appState, setTheme } from './state.js';
 import { Router } from './router.js';
 import { connect, sbStatus, subscribe, kvGet } from '../services/supabase.js';
 import { purgeLegacyStorage } from '../services/config.js';
+import { initActions } from './actions.js';
 import { initTasks } from '../features/tasks/TasksView.js';
 import { flushPending } from './completions.js';
 import { initLoginConnection, refreshLoginStatus, loginErrorMessage } from '../features/settings/loginConnection.js';
@@ -188,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', syncHeaderHeight);
   window.addEventListener('load', syncHeaderHeight);
   document.fonts?.ready?.then(syncHeaderHeight);
+  initActions();
   initLoginConnection();
   initDashboard();
   initTasks();
