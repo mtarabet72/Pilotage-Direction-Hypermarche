@@ -19,10 +19,12 @@ jobs:
           set -e
           find src -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      # vendor/ est exclu : supabase-js contient le texte « sb_secret_ » dans son propre avertissement.
+      # Son intégrité est vérifiée par les empreintes SHA-256 plus bas.
       - name: Aucun secret dans le code
         run: |
           set -e
-          if grep -rIEn "sb_secret_|service_role_key\s*[:=]\s*['\"]|eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}" --exclude-dir=.git --exclude-dir=.github .; then
+          if grep -rIEn "sb_secret_|service_role_key\s*[:=]\s*['\"]|eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}" --exclude-dir=.git --exclude-dir=.github --exclude-dir=vendor .; then
             echo "::error::Un secret semble présent dans le code (clé secrète ou jeton)."; exit 1
           fi
           echo "OK : aucun secret détecté"
