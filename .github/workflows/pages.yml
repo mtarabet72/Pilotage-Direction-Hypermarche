@@ -30,7 +30,7 @@ jobs:
             if [ ! -e "_site/$f" ]; then echo "::error::Fichier manquant dans la publication : $f"; missing=1; fi
           done
           [ "$missing" = 0 ]
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
