@@ -22,7 +22,14 @@ jobs:
       - name: Ne publier que le site (pas la base, ni les workflows)
         run: |
           mkdir _site
-          cp -r index.html manifest.json service-worker.js icon-192.png icon-512.png src _site/
+          cp -r index.html manifest.json service-worker.js icon-192.png icon-512.png src vendor _site/
+      - name: Vérifier que tout ce que la page charge est bien publié
+        run: |
+          missing=0
+          for f in $(grep -oE '(src|href)="\./[^"]+"' _site/index.html | sed -E 's/^(src|href)="\.\///; s/"$//'); do
+            if [ ! -e "_site/$f" ]; then echo "::error::Fichier manquant dans la publication : $f"; missing=1; fi
+          done
+          [ "$missing" = 0 ]
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -36,3 +43,4 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
