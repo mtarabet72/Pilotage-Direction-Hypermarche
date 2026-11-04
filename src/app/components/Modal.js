@@ -35,5 +35,7 @@ export function openModal({ title, bodyHtml, saveLabel = 'Enregistrer', onSave, 
 
 export function closeModal() {
   $('hm-modal')?.classList.remove('open');
+  // On vide le contenu : il peut contenir des mots de passe provisoires qui ne doivent pas rester dans la page.
+  const body = $('hm-modal-body'); if (body) body.innerHTML = '';
   onSaveCb = null;
 }

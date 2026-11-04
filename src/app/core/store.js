@@ -1,4 +1,5 @@
 import { ROLES } from '../data/roles.js';
+import { safeColor, safeIcon } from './dom.js';
 import { kvGet, kvList, getAll, getClient } from '../services/supabase.js';
 import { getCurrentUser, getUsers, isDirector } from '../services/auth.js';
 import {
@@ -165,7 +166,16 @@ export async function applyRealtime({ table, key, fresh }) {
 }
 
 // ── Rôles & tâches ──────────────────────────────────────────
-export const getAllRoles = () => [...ROLES, ...(store.customRoles || [])];
+// Les rôles personnalisés viennent de la base : on neutralise couleur/icône (injectées dans du HTML) à chaque lecture.
+// Modification sur place et idempotente : l'identité des objets ne change pas.
+function normalizeCustomRole(r) {
+  if (!r || typeof r !== 'object') return r;
+  r.color = safeColor(r.color, '#555555');
+  r.light = safeColor(r.light, '#f0f2f5');
+  r.icon = safeIcon(r.icon);
+  return r;
+}
+export const getAllRoles = () => [...ROLES, ...(store.customRoles || []).map(normalizeCustomRole)];
 export const getRole = (id) => getAllRoles().find((r) => r.id === id);
 
 export const PERM_ROLE_IDS = ['perm_matin', 'perm_soir', 'perm_tranche'];

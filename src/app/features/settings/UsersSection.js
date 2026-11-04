@@ -16,7 +16,8 @@ export function usersSectionHtml() {
   const actifs = users.filter((u) => u.active !== false).length;
   const head = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:10px 14px;background:linear-gradient(135deg,#0a1628,#102244);border-radius:10px;color:#fff;">
     <div style="font-size:12px;font-weight:700;">👥 ${users.length} utilisateur${users.length > 1 ? 's' : ''} · <span style="color:#4ade80;">${actifs} actif${actifs > 1 ? 's' : ''}</span></div>
-    <button type="button" data-action="user-add" style="background:#e63950;border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">➕ Ajouter</button></div>`;
+    <span style="display:flex;gap:8px;"><button type="button" data-action="user-reset-all" title="Générer de nouveaux mots de passe provisoires pour tous les utilisateurs actifs" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🔑 Tout réinitialiser</button>
+    <button type="button" data-action="user-add" style="background:#e63950;border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">➕ Ajouter</button></span></div>`;
   const cards = users.map((u) => {
     const active = u.active !== false, rc = ROLE_COLORS[u.systemRole] || '#888', self = u.id === me?.id;
     const own = u.ownRoleId && roles.find((r) => r.id === u.ownRoleId);
@@ -87,6 +88,46 @@ function showCredentials(name, username, tempPassword) {
   });
 }
 
+// Feuille imprimable : un mot de passe provisoire par personne, à découper et remettre en main propre.
+function showAccessSheet(rows, failed) {
+  const slips = rows.map((r) => `<div class="as-slip"><div class="as-name">${esc(r.name)}</div>
+      <div><span class="as-lbl">Identifiant</span> <b class="as-mono">${esc(r.username)}</b></div>
+      <div><span class="as-lbl">Mot de passe provisoire</span> <b class="as-mono">${esc(r.pw)}</b></div>
+      <div class="as-note">À changer à la première connexion.</div></div>`).join('');
+  const fail = failed.length ? `<div style="background:#fdecea;color:#c0392b;padding:8px 10px;border-radius:8px;font-size:12px;margin-bottom:10px;">⚠️ Échec pour : ${failed.map((f) => esc(f)).join(', ')}. Réessayez avec la clé 🔑 de chaque ligne.</div>` : '';
+  openModal({
+    title: `🔐 ${rows.length} mot${rows.length > 1 ? 's' : ''} de passe provisoire${rows.length > 1 ? 's' : ''}`, saveLabel: "J'ai imprimé, fermer",
+    bodyHtml: `<div class="as-hint">Ces mots de passe ne seront <b>plus jamais affichés</b>. Imprimez cette feuille, découpez les fiches et remettez-les en main propre. Détruisez la feuille ensuite. Les anciens mots de passe ne fonctionnent plus.</div>
+      ${fail}<button type="button" class="user-btn" id="as-print" style="margin-bottom:10px;">🖨️ Imprimer la feuille</button>
+      <div class="as-grid" id="as-sheet">${slips}</div>`,
+    onOpen: (root) => root.querySelector('#as-print').addEventListener('click', () => {
+      document.body.classList.add('printing-sheet');
+      window.addEventListener('afterprint', () => document.body.classList.remove('printing-sheet'), { once: true });
+      window.print();
+    }),
+    onSave: () => {}
+  });
+}
+
+async function resetAll(onDone) {
+  const me = getCurrentUser();
+  const targets = getUsers().filter((u) => u.active !== false && u.id !== me?.id);
+  if (!targets.length) return toast('Aucun autre utilisateur actif', '#e67e22');
+  if (!window.confirm(`Générer un NOUVEAU mot de passe provisoire pour ${targets.length} utilisateur(s) ?\n\n• Les mots de passe actuels cesseront de fonctionner.\n• Chacun devra en choisir un nouveau à sa prochaine connexion.\n• Les nouveaux mots de passe seront affichés UNE SEULE FOIS, sur une feuille à imprimer.\n\nVotre propre mot de passe n'est pas modifié.`)) return;
+  const rows = [], failed = [];
+  for (let i = 0; i < targets.length; i++) {
+    const u = targets[i];
+    toast(`🔑 Réinitialisation ${i + 1}/${targets.length}…`, '#2980b9');
+    try {
+      const r = await resetPassword(u.id, '');
+      if (r.tempPassword) rows.push({ name: u.name, username: u.username, pw: r.tempPassword }); else failed.push(u.name);
+    } catch (e) { failed.push(u.name); }
+  }
+  onDone();
+  if (rows.length) showAccessSheet(rows, failed);
+  else toast('❌ Aucun mot de passe généré : ' + failed.join(', '), '#e74c3c');
+}
+
 const syncMsg = (ok, msg) => toast(ok ? msg : msg + ' — ⚠️ synchronisation en attente', ok ? '#27ae60' : '#e67e22');
 
 export function openUserForm(userId, onDone) {
@@ -132,6 +173,7 @@ export function openResetPassword(userId, onDone) {
 export async function handleUserAction(action, userId, onDone) {
   try {
     if (action === 'user-add') return openUserForm(null, onDone);
+    if (action === 'user-reset-all') return resetAll(onDone);
     if (action === 'user-edit') return openUserForm(userId, onDone);
     if (action === 'user-pw') return openResetPassword(userId, onDone);
     if (action === 'user-toggle') {

@@ -3,13 +3,17 @@
 // Version : hm-supabase-v2
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'pilotage-hm-v4';
+const CACHE_NAME = 'pilotage-hm-v5';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './vendor/fonts.css',
+  './vendor/supabase-js-2.117.3.min.js',
+  './vendor/html2canvas-1.4.1.min.js',
+  './vendor/jspdf-2.5.1.umd.min.js'
 ];
 
 self.addEventListener('install', e => {

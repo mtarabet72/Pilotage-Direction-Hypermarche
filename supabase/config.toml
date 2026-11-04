@@ -1,0 +1,6 @@
+# Extrait de configuration Supabase (à fusionner dans supabase/config.toml du dépôt).
+# verify_jwt = false : le projet utilise des clés « sb_publishable_… » qui ne sont pas des JWT.
+# La fonction vérifie elle-même l'identité (jeton utilisateur validé par Supabase Auth + rôle Directeur).
+[functions.admin-users]
+enabled = true
+verify_jwt = false
