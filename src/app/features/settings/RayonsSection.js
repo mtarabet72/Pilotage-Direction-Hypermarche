@@ -6,6 +6,21 @@ import { esc, toast } from '../../core/dom.js';
 
 const DEPTS = ['PGC', 'PRODUITS FRAIS', 'BAZAR', 'TEXTILE', 'SERVICES', 'ELECTROMENAGER', 'AUTRE'];
 const DEPT_COLORS = { PGC: '#2980b9', 'PRODUITS FRAIS': '#27ae60', BAZAR: '#8e44ad', TEXTILE: '#e67e22', SERVICES: '#16a085', ELECTROMENAGER: '#2c3e50', AUTRE: '#7f8c8d' };
+const EXTRA_COLORS = ['#c0392b', '#d35400', '#1abc9c', '#2e86c1', '#7d3c98', '#b7950b', '#117a65', '#6c3483'];
+const NEW_DEPT = '__nouveau__';
+// Départements proposés : la liste de base + ceux déjà utilisés par un rayon (créés via « Nouveau département »).
+const savedDepts = () => (Array.isArray((store.companyData || {}).departements) ? store.companyData.departements : []).filter((d) => typeof d === 'string' && d);
+const allDepts = () => {
+  const used = Object.values(store.rayons || {}).map((r) => r.departement).filter(Boolean);
+  const extra = [...new Set([...used, ...savedDepts()])].filter((d) => !DEPTS.includes(d)).sort();
+  return [...DEPTS.filter((d) => d !== 'AUTRE'), ...extra, 'AUTRE'];
+};
+const deptColor = (d) => {
+  if (DEPT_COLORS[d]) return DEPT_COLORS[d];
+  let h = 0; for (const ch of String(d)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return EXTRA_COLORS[h % EXTRA_COLORS.length];
+};
+const cleanDept = (v) => String(v || '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 40);
 const FREQS = [['Q', '📅 Quotidien'], ['H', '📆 Hebdomadaire'], ['M', '🗓️ Mensuel']];
 const RESP = [['employes', '👥 Employés'], ['superviseur', '👁️ Superviseur'], ['chef', '👤 Chef de rayon']];
 const TO_ASSIGN = 'À affecter';
@@ -15,13 +30,15 @@ export function rayonsSectionHtml() {
   const keys = Object.keys(store.rayons).sort((a, b) => (store.rayons[a].numero || 999) - (store.rayons[b].numero || 999));
   const head = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
     <button type="button" class="btn-primary" data-action="rayon-add">➕ Ajouter un rayon</button>
+    <button type="button" class="btn-primary" data-action="rayon-dept-add" style="background:#fff;color:#333;">🏷️ Ajouter un département</button>
     <button type="button" class="btn-primary" data-action="rayon-import" style="background:#fff;color:#333;">📥 Importer les rayons standards (${RAYONS_STANDARD.length})</button></div>`;
-  if (!keys.length) return head + '<div style="text-align:center;padding:28px 20px;color:var(--muted);font-size:13px;background:#f8fafc;border-radius:10px;border:2px dashed var(--border);"><div style="font-size:34px;margin-bottom:8px;">🏪</div><b>Aucun rayon créé</b></div>';
+  if (!keys.length && !savedDepts().length) return head + '<div style="text-align:center;padding:28px 20px;color:var(--muted);font-size:13px;background:#f8fafc;border-radius:10px;border:2px dashed var(--border);"><div style="font-size:34px;margin-bottom:8px;">🏪</div><b>Aucun rayon créé</b></div>';
   const byDept = {};
   keys.forEach((k) => { const d = store.rayons[k].departement || 'AUTRE'; (byDept[d] = byDept[d] || []).push(k); });
+  savedDepts().forEach((d) => { if (!byDept[d]) byDept[d] = []; });
   return head + Object.keys(byDept).sort().map((d) => {
-    const c = DEPT_COLORS[d] || '#7f8c8d';
-    return `<div style="margin-bottom:14px;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:${c};display:flex;margin-bottom:6px;"><span style="flex:1">${esc(d)}</span><span style="font-weight:400;color:var(--muted)">${byDept[d].length} rayon${byDept[d].length > 1 ? 's' : ''}</span></div>
+    const c = deptColor(d);
+    return `<div style="margin-bottom:14px;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:${c};display:flex;margin-bottom:6px;"><span style="flex:1">${esc(d)}</span><span style="font-weight:400;color:var(--muted)">${byDept[d].length} rayon${byDept[d].length > 1 ? 's' : ''}</span>${savedDepts().includes(d) && !byDept[d].length ? `<button type="button" data-action="rayon-dept-del" data-rayon="${esc(d)}" title="Supprimer ce département" style="${btn}border:1px solid #e74c3c;color:#e74c3c;background:#fdf2f2;margin-left:8px;">🗑️</button>` : ''}</div>
       ${byDept[d].map((k) => {
         const r = store.rayons[k], n = (r.taches || []).length, e = r.equipe || {};
         return `<div data-rayon="${esc(k)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:7px;flex-wrap:wrap;">
@@ -45,7 +62,8 @@ function formBody(r) {
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
     ${f('mr-nom', 'Nom du rayon *', r.nom || '', ' style="grid-column:1/-1"')}
     <div class="modal-field"><label>Numéro</label><input type="number" id="mr-num" value="${esc(r.numero || '')}" min="1" max="999" style="width:100%;box-sizing:border-box;"></div>
-    <div class="modal-field"><label>Département</label><select id="mr-dept" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;">${DEPTS.map((d) => `<option${(r.departement || 'PGC') === d ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+    <div class="modal-field"><label>Département</label><select id="mr-dept" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;">${allDepts().map((d) => `<option value="${esc(d)}"${(r.departement || 'PGC') === d ? ' selected' : ''}>${esc(d)}</option>`).join('')}<option value="${NEW_DEPT}">➕ Nouveau département…</option></select>
+      <input type="text" id="mr-dept-new" maxlength="40" placeholder="Nom du nouveau département" style="display:none;width:100%;box-sizing:border-box;margin-top:6px;"></div>
     ${f('mr-chef', 'Chef de rayon', e.chef && e.chef !== TO_ASSIGN ? e.chef : '')}${f('mr-sup', 'Superviseur', e.superviseur && e.superviseur !== TO_ASSIGN ? e.superviseur : '')}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;"><b style="font-size:12px;color:var(--muted);text-transform:uppercase;">📋 Tâches du rayon</b>
       <button type="button" id="mr-add" style="${btn}border:1px solid #2980b9;color:#2980b9;background:#eaf4fb;">+ Ajouter tâche</button></div>
@@ -60,6 +78,12 @@ export function openRayonForm(key, onDone) {
       const list = root.querySelector('#mr-tasks');
       root.querySelector('#mr-add').addEventListener('click', () => { list.insertAdjacentHTML('beforeend', taskRow({})); list.lastElementChild.querySelector('input').focus(); });
       list.addEventListener('click', (e) => { if (e.target.closest('[data-rm]')) e.target.closest('.mr-task').remove(); });
+      const deptSel = root.querySelector('#mr-dept'), deptNew = root.querySelector('#mr-dept-new');
+      deptSel.addEventListener('change', () => {
+        const isNew = deptSel.value === NEW_DEPT;
+        deptNew.style.display = isNew ? 'block' : 'none';
+        if (isNew) deptNew.focus();
+      });
       root.querySelector('#mr-nom').focus();
     },
     onSave: async (root) => {
@@ -67,12 +91,19 @@ export function openRayonForm(key, onDone) {
       const nom = v('#mr-nom'), numero = parseInt(v('#mr-num'), 10) || 0;
       if (!nom) { toast('⚠️ Le nom du rayon est requis', '#e74c3c'); return false; }
       if (numero && Object.entries(store.rayons).some(([k, x]) => x.numero === numero && k !== key)) { toast(`⚠️ Le numéro ${numero} est déjà utilisé`, '#e74c3c'); return false; }
+      let departement = v('#mr-dept');
+      if (departement === NEW_DEPT) {
+        departement = cleanDept(v('#mr-dept-new'));
+        if (!departement) { toast('⚠️ Saisissez le nom du nouveau département', '#e74c3c'); return false; }
+        const same = allDepts().find((d) => d.toUpperCase() === departement);
+        if (same) departement = same;
+      }
       const taches = [...root.querySelectorAll('.mr-task')].map((row, i) => ({
         id: row.dataset.id || `RT-${Date.now()}-${i}`, label: row.querySelector('[data-field="label"]').value.trim(),
         freq: row.querySelector('[data-field="freq"]').value, responsable: row.querySelector('[data-field="responsable"]').value
       })).filter((t) => t.label);
       const k = key || `${nom.toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 20)}_${Date.now()}`;
-      store.rayons[k] = { nom, numero, departement: v('#mr-dept'), secteur: r.secteur || 'Commercial',
+      store.rayons[k] = { nom, numero, departement, secteur: r.secteur || 'Commercial',
         equipe: { chef: v('#mr-chef') || TO_ASSIGN, superviseur: v('#mr-sup') || TO_ASSIGN, employes: (r.equipe && r.equipe.employes) || [] }, taches };
       const res = await saveShared('rayons');
       toast(res.synced ? (key ? '✅ Rayon modifié' : '✅ Rayon créé') : '⚠️ Enregistré sur cet appareil — synchronisation en attente', res.synced ? '#27ae60' : '#e67e22');
@@ -81,7 +112,34 @@ export function openRayonForm(key, onDone) {
   });
 }
 
+async function saveDepts(list, okMsg, onDone) {
+  store.companyData = { ...(store.companyData || {}), departements: list };
+  const res = await saveShared('companyData');
+  toast(res.synced ? okMsg : '⚠️ Enregistré sur cet appareil — synchronisation en attente', res.synced ? '#27ae60' : '#e67e22');
+  onDone();
+}
+
+function openDeptForm(onDone) {
+  openModal({
+    title: '🏷️ Nouveau département', saveLabel: '✅ Créer le département',
+    bodyHtml: '<div class="modal-field"><label>Nom du département *</label><input type="text" id="md-nom" maxlength="40" placeholder="Ex. QUALITÉ, DÉCORATION, ADJOINT DE DIRECTION" style="width:100%;box-sizing:border-box;"></div><div style="font-size:11px;color:var(--muted);">Le département peut exister sans rayon. Vous pourrez y rattacher des rayons ensuite.</div>',
+    onOpen: (root) => root.querySelector('#md-nom').focus(),
+    onSave: async (root) => {
+      const nom = cleanDept(root.querySelector('#md-nom').value);
+      if (!nom) { toast('⚠️ Le nom du département est requis', '#e74c3c'); return false; }
+      if (allDepts().some((d) => d.toUpperCase() === nom)) { toast('⚠️ Ce département existe déjà', '#e74c3c'); return false; }
+      await saveDepts([...savedDepts(), nom], '✅ Département créé', onDone);
+    }
+  });
+}
+
 export async function handleRayonAction(action, key, onDone) {
+  if (action === 'rayon-dept-add') return openDeptForm(onDone);
+  if (action === 'rayon-dept-del') {
+    if (Object.values(store.rayons).some((r) => r.departement === key)) return toast('⚠️ Ce département contient des rayons', '#e74c3c');
+    if (!window.confirm(`Supprimer le département « ${key} » ?`)) return;
+    return saveDepts(savedDepts().filter((d) => d !== key), '🗑️ Département supprimé', onDone);
+  }
   if (action === 'rayon-add') return openRayonForm(null, onDone);
   if (action === 'rayon-edit') return openRayonForm(key, onDone);
   if (action === 'rayon-del') {
