@@ -4,6 +4,7 @@ import { saveShared } from '../../core/persist.js';
 import { sbStatus, explainError } from '../../services/supabase.js';
 import { usersSectionHtml, handleUserAction } from './UsersSection.js';
 import { rayonsSectionHtml, handleRayonAction } from './RayonsSection.js';
+import { fonctionsSectionHtml, handleFonctionAction } from './FonctionsSection.js';
 import { planningSectionHtml, handlePlanningAction } from './PlanningSection.js';
 import { $, esc, toast } from '../../core/dom.js';
 
@@ -73,6 +74,7 @@ export function renderSettings() {
   if (!isDirector()) { el.innerHTML = '<div class="settings-card"><h3>⚙️ Paramètres</h3><div style="color:var(--muted);font-size:13px;">Accès réservé au Directeur.</div></div>'; return; }
   const focus = document.activeElement?.id;
   el.innerHTML = companyHtml() + `<div class="settings-card"><h3>👥 Utilisateurs</h3><div id="users-list">${usersSectionHtml()}</div></div>`
+    + `<div class="settings-card"><h3>🧩 Fonctions</h3><div id="fonctions-list">${fonctionsSectionHtml()}</div></div>`
     + `<div class="settings-card"><h3>🏪 Rayons</h3><div id="rayons-list">${rayonsSectionHtml()}</div></div>`
     + `<div class="settings-card"><h3>🕐 Planning de permanence</h3><div id="plan-wrap">${planningSectionHtml()}</div></div>` + connectionHtml() + backupHtml();
   if (focus && $(focus)) $(focus).focus();
@@ -120,6 +122,7 @@ export function initSettings() {
     if (!btn) return;
     const a = btn.dataset.action;
     if (a.startsWith('user-')) return handleUserAction(a, btn.closest('[data-uid]')?.dataset.uid, renderSettings);
+    if (a.startsWith('fonction-')) return handleFonctionAction(a, btn.closest('[data-fonction]')?.dataset.fonction, renderSettings);
     if (a.startsWith('rayon-')) return handleRayonAction(a, btn.closest('[data-rayon]')?.dataset.rayon, renderSettings);
     if (a.startsWith('plan-')) return handlePlanningAction(a, renderSettings);
     if (a === 'company-save') return saveCompany();
